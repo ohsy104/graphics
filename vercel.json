@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "name": "ai-climate-explorer",
+  "framework": "static",
+  "installCommand": "npm install",
+  "buildCommand": "echo 'No build required for static site'",
+  "outputDirectory": ".",
+  "cleanUrls": true
+}
