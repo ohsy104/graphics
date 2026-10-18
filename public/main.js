@@ -1,5 +1,5 @@
 // public/main.js
-// Updated: more verbose debug output, moved browse button above drop area, improved label handling
+// Fixed: ensure file input "찾아보기" works, robust listeners, debug logs
 
 document.addEventListener('DOMContentLoaded', () => {
   console.log('main.js loaded (DOMContentLoaded)');
@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }catch(e){
       console.error('Model load failed:', e);
       setModelStatus('로드 실패 — 콘솔 확인');
-      appendDebug('Model load failed: ' + e.message);
+      appendDebug('Model load failed: ' + (e.message || e));
     }
   }
 
@@ -68,12 +68,30 @@ document.addEventListener('DOMContentLoaded', () => {
     ['dragenter','dragover'].forEach(evt => dropArea.addEventListener(evt, (e)=>{ e.preventDefault(); e.stopPropagation(); dropArea.classList.add('dragover'); }));
     ['dragleave','dragend','drop'].forEach(evt => dropArea.addEventListener(evt, (e)=>{ e.preventDefault(); e.stopPropagation(); dropArea.classList.remove('dragover'); }));
     dropArea.addEventListener('drop', (e)=>{ const dt = e.dataTransfer; if (!dt || !dt.files || dt.files.length===0) return; handleFile(dt.files[0]); });
+  } else {
+    console.warn('dropArea element not found');
   }
 
-  if (browseBtn && fileInput){ browseBtn.addEventListener('click', ()=> fileInput.click()); fileInput.addEventListener('change', (e)=>{ const f = e.target.files && e.target.files[0]; if (f) handleFile(f); }); }
+  // Ensure browse button and file input work
+  if (browseBtn && fileInput){
+    browseBtn.addEventListener('click', ()=> {
+      try{ fileInput.click(); }
+      catch(err){ console.error('fileInput.click() failed', err); appendDebug('fileInput.click() failed: ' + err.message); }
+    });
+
+    fileInput.addEventListener('change', (e)=>{
+      const f = e.target && e.target.files && e.target.files[0];
+      if (f) handleFile(f);
+      else console.debug('file input change but no file selected');
+    });
+  } else {
+    console.warn('browseBtn or fileInput not found', { browseBtn: !!browseBtn, fileInput: !!fileInput });
+    appendDebug('browse or file input missing');
+  }
 
   function handleFile(file){
-    if (!file.type.startsWith('image/')){ alert('이미지 파일만 업로드할 수 있습니다.'); return; }
+    if (!file) return;
+    if (!file.type || !file.type.startsWith('image/')){ alert('이미지 파일만 업로드할 수 있습니다.'); return; }
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = ()=>{
@@ -83,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
       currentImageElement = img; updateClassifyButton(); URL.revokeObjectURL(url);
       appendDebug('Image loaded for prediction (w:' + img.naturalWidth + ', h:' + img.naturalHeight + ')');
     };
-    img.onerror = (err)=>{ console.error('Image load error', err); alert('이미지를 불러오는 데 실패했습니다.'); URL.revokeObjectURL(url); appendDebug('Image load error: ' + err.message); };
+    img.onerror = (err)=>{ console.error('Image load error', err); alert('이미지를 불러오는 데 실패했습니다.'); URL.revokeObjectURL(url); appendDebug('Image load error: ' + (err && err.message)); };
     img.src = url;
   }
 
@@ -140,10 +158,15 @@ document.addEventListener('DOMContentLoaded', () => {
       appendDebug('Predictions: ' + JSON.stringify(normalized));
       renderTop3(normalized);
       // capture image data url
-      const cvs = document.createElement('canvas'); cvs.width = currentImageElement.naturalWidth || currentImageElement.width; cvs.height = currentImageElement.naturalHeight || currentImageElement.height; const ctx = cvs.getContext('2d'); ctx.drawImage(currentImageElement,0,0,cvs.width,cvs.height); const dataUrl = cvs.toDataURL('image/png');
+      const cvs = document.createElement('canvas');
+      cvs.width = currentImageElement.naturalWidth || currentImageElement.width;
+      cvs.height = currentImageElement.naturalHeight || currentImageElement.height;
+      const ctx = cvs.getContext('2d');
+      ctx.drawImage(currentImageElement,0,0,cvs.width,cvs.height);
+      const dataUrl = cvs.toDataURL('image/png');
       addHistoryItem(dataUrl, normalized[0].label, normalized[0].prob, normalized);
       const banner = document.createElement('div'); banner.style.position='fixed'; banner.style.right='20px'; banner.style.top='92px'; banner.style.background='linear-gradient(90deg,#2fb64b,#0b8a3e)'; banner.style.color='white'; banner.style.padding='10px 14px'; banner.style.borderRadius='8px'; banner.style.boxShadow='0 6px 18px rgba(11,138,62,0.12)'; banner.style.fontWeight='700'; banner.innerText = `분류 결과: ${normalized[0].label} (${Math.round(normalized[0].prob*100)}%)`; document.body.appendChild(banner); setTimeout(()=>banner.remove(),2000);
-    }catch(e){ console.error('Classification failed', e); appendDebug('Classification failed: ' + e.message); alert('예측 중 오류가 발생했습니다. 콘솔을 확인해 주세요.'); }
+    }catch(e){ console.error('Classification failed', e); appendDebug('Classification failed: ' + (e && e.message)); alert('예측 중 오류가 발생했습니다. 콘솔을 확인해 주세요.'); }
   });
 
 });
