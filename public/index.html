@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI 기후탐험대 — 평가 화면</title>
+  <style>
+    :root{
+      --header-bg:#0b8a3e; /* 진한 초록(상단) */
+      --header-fg:#ffffff;
+      --page-bg:#f3fff1; /* 매우 연한 연두색 */
+      --panel-bg:#ffffff;
+      --accent-green:#b8f2a1;
+      --bad-red:#f48b8b;
+      --muted:#666;
+      --card-border:#e0e0e0;
+    }
+    html,body{height:100%;margin:0;font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;background:var(--page-bg);color:#0b2e10}
+    header{background:var(--header-bg);color:var(--header-fg);padding:1rem;text-align:center}
+    header h1{margin:0;font-size:1.5rem}
+    .container{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:1rem;padding:1rem;height:calc(100vh - 76px);box-sizing:border-box}
+    .card{background:var(--panel-bg);border:1px solid var(--card-border);border-radius:8px;padding:1rem;box-shadow:0 1px 2px rgba(0,0,0,0.03);overflow:auto}
+    /* left-top: upload + webcam */
+    #input-area{display:flex;flex-direction:column;gap:0.75rem;align-items:flex-start}
+    #preview{width:320px;height:220px;border:1px dashed #cfcfcf;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fafafa}
+    #preview img, #preview canvas{max-width:100%;max-height:100%;display:block}
+    #controls{display:flex;gap:0.5rem;flex-wrap:wrap}
+    button, select, input[type="file"]{padding:0.4rem 0.6rem;border-radius:6px;border:1px solid #cfcfcf;background:white;cursor:pointer}
+    button[disabled]{opacity:0.5;cursor:default}
+    /* right-top: confusion matrix */
+    table.confusion{border-collapse:collapse;width:100%;text-align:center}
+    table.confusion th, table.confusion td{border:1px solid #ddd;padding:0.5rem}
+    table.confusion th{background:#fafafa}
+    .cell-correct{background:var(--accent-green)}
+    .cell-wrong{background:var(--bad-red)}
+    /* left-bottom: bars */
+    .bars{display:flex;flex-direction:column;gap:0.5rem}
+    .bar-row{display:flex;align-items:center;gap:0.5rem}
+    .bar-label{width:120px;font-size:0.95rem}
+    .bar-track{flex:1;background:#eee;height:18px;border-radius:9px;overflow:hidden}
+    .bar-fill{height:100%;background:linear-gradient(90deg,#88e27a,#2fb64b)}
+    .percent{width:48px;text-align:right;font-size:0.9rem}
+    /* right-bottom: misclassified gallery + errors */
+    .gallery{display:flex;flex-wrap:wrap;gap:0.5rem}
+    .thumb{width:96px;height:72px;border:1px solid #ddd;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:11px;flex-direction:column;background:#fff;padding:4px}
+    .thumb img{max-width:100%;max-height:56px;display:block}
+    .error-box{margin-top:0.8rem;padding:0.6rem;border-radius:6px;background:#fff3f3;border:1px solid #f1cfcf}
+    .small-note{font-size:0.85rem;color:var(--muted)}
+    footer{padding:0.5rem 1rem;text-align:right;font-size:0.85rem;color:var(--muted)}
+    @media(max-width:900px){
+      .container{grid-template-columns:1fr;grid-template-rows:auto auto auto auto;height:auto}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AI 기후탐험대</h1>
+  </header>
+
+  <div class="container">
+    <!-- LEFT TOP: upload + webcam -->
+    <section class="card" id="left-top">
+      <h2>사진 입력</h2>
+      <div id="input-area">
+        <div id="preview">미리보기가 여기에 표시됩니다</div>
+        <div id="controls">
+          <input type="file" id="file-input" accept="image/*">
+          <button id="start-webcam">웹캠 시작</button>
+          <button id="capture" disabled>캡처</button>
+          <button id="predict-btn" disabled>예측 및 기록</button>
+          <select id="truth-select">
+            <option value="0">열대기후</option>
+            <option value="1">한대기후</option>
+            <option value="2">온대기후</option>
+          </select>
+          <select id="model-select">
+            <option value="models/my-model/" selected>models/my-model/ (기본)</option>
+            <option value="">사용자 지정 URL...</option>
+          </select>
+          <button id="start-model">모델 불러오기</button>
+        </div>
+        <div class="small-note">업로드 또는 웹캠으로 이미지를 입력하고, 실제 레이블(정답)을 선택한 뒤 "예측 및 기록"을 누르세요.</div>
+      </div>
+    </section>
+
+    <!-- RIGHT TOP: confusion matrix -->
+    <section class="card" id="right-top">
+      <h2>혼동행렬 (Confusion Matrix)</h2>
+      <div id="confusion-container">
+        <table class="confusion" id="confusion-table">
+          <!-- 동적으로 채움 -->
+        </table>
+      </div>
+      <div class="small-note" style="margin-top:0.5rem">정분류 셀은 연두색, 오분류 셀은 붉은색으로 표시됩니다.</div>
+    </section>
+
+    <!-- LEFT BOTTOM: bars -->
+    <section class="card" id="left-bottom">
+      <h2>클래스별 정분류율</h2>
+      <div class="bars" id="bars-container">
+        <!-- 동적 -->
+      </div>
+      <div class="small-note" style="margin-top:0.5rem">각 클래스의 정분류율(%)을 보여줍니다. 데이터가 부족하면 0%으로 표시됩니다.</div>
+    </section>
+
+    <!-- RIGHT BOTTOM: misclassified gallery + errors -->
+    <section class="card" id="right-bottom">
+      <h2>틀린 사진 모음 / 정확도 오류</h2>
+      <div id="gallery" class="gallery"></div>
+
+      <div class="error-box" id="error-box">
+        <strong>정확도 오류 (정확도 &lt; 75%)</strong>
+        <ul id="error-list"></ul>
+      </div>
+    </section>
+  </div>
+
+  <!-- 라이브러리 -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+  <script src="./main.js"></script>
+  <footer>모델 위치: <span id="model-path-display">models/my-model/</span></footer>
+</body>
+</html>
