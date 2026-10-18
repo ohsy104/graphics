@@ -6,11 +6,11 @@
   <title>AI 세계기후탐험대 — 평가 화면</title>
   <style>
     :root{
-      --header-bg:#063e1a; /* 진한 녹색 */
+      --header-bg:#063e1a;
       --header-fg:#ffffff;
-      --page-bg:#ffffff; /* 흰색 배경 */
-      --left-card-bg:#eaf7ec; /* 왼쪽 블럭 통일 색 */
-      --right-card-bg:#eefef6; /* 오른쪽 블럭 통일 색 */
+      --page-bg:#ffffff;
+      --left-card-bg:#eaf7ec;
+      --right-card-bg:#eefef6;
       --card-border:#e6e6e6;
       --primary:#0b8a3e;
       --accent:#2fb64b;
@@ -24,7 +24,6 @@
     .left-card{background:var(--left-card-bg)}
     .right-card{background:var(--right-card-bg)}
 
-    /* Drag & drop area */
     #drop-area{width:100%;max-width:420px;height:260px;border:2px dashed rgba(11,138,62,0.18);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg, rgba(255,255,255,0.6), rgba(250,255,245,0.6));transition:all .15s}
     #drop-area.dragover{border-color:var(--primary);background:linear-gradient(180deg, #ffffff, #f7fff6);box-shadow:0 6px 18px rgba(11,138,62,0.06)}
     #drop-area img{max-width:100%;max-height:100%;border-radius:8px}
@@ -71,7 +70,6 @@
   </header>
 
   <div class="container">
-    <!-- LEFT TOP: drag & drop image input -->
     <section class="card left-card" id="left-top">
       <h2>사진 넣기</h2>
       <div id="input-area">
@@ -96,7 +94,6 @@
       </div>
     </section>
 
-    <!-- RIGHT TOP: confusion matrix -->
     <section class="card right-card" id="right-top">
       <h2>혼동행렬</h2>
       <div id="confusion-container">
@@ -105,14 +102,12 @@
       <div class="small-note" style="margin-top:0.5rem">정분류 셀은 연두색, 오분류 셀은 붉은색으로 표시됩니다.</div>
     </section>
 
-    <!-- LEFT BOTTOM: bars -->
     <section class="card left-card" id="left-bottom">
       <h2>클래스별 정분류율</h2>
       <div class="bars" id="bars-container"></div>
       <div class="small-note">각 클래스의 정분류율(%)을 보여줍니다.</div>
     </section>
 
-    <!-- RIGHT BOTTOM: gallery + errors -->
     <section class="card right-card" id="right-bottom">
       <h2>틀린 사진 모음 / 정확도 오류</h2>
       <div id="gallery" class="gallery"></div>
@@ -125,7 +120,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
-  <script src="./public/main.js"></script>
+  <script src="./main.js"></script>
   <footer></footer>
 </body>
 </html>
