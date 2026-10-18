@@ -1,9 +1,10 @@
 // public/main.js (drag-and-drop simplified UI)
+// - Uses external Teachable Machine model URL provided by user
 // - Drag & drop image input
 // - No webcam
 // - Simple, clear "분류하기" button that runs model.predict and records results
 
-const MODEL_BASE = "models/my-model/"; // 기본 경로 (repo의 public/models/my-model/)
+const MODEL_BASE = "https://teachablemachine.withgoogle.com/models/4E3fH9sQf/"; // <- set to the model URL you provided
 const CLASS_NAMES = ["열대기후", "한대기후", "온대기후"];
 
 let model = null;
@@ -32,7 +33,7 @@ renderBars();
 renderGallery();
 renderErrors();
 
-// auto-load model (best-effort). If fails, user sees alert when trying to classify.
+// auto-load model from external URL (best-effort). If fails, user sees alert when trying to classify.
 (async function autoLoad(){
   const modelURL = MODEL_BASE + (MODEL_BASE.endsWith("/")?"":"/") + "model.json";
   const metadataURL = MODEL_BASE + (MODEL_BASE.endsWith("/")?"":"/") + "metadata.json";
@@ -93,7 +94,7 @@ function handleFile(file){
 // classify & record
 classifyBtn.addEventListener('click', async ()=>{
   if (!model){
-    alert('모델이 아직 로드되지 않았어요. 먼저 public/models/my-model/ 아래에 모델 파일을 업로드했는지 확인해 주세요.');
+    alert('모델을 불러오지 못했습니다. 외부 모델 URL 또는 네트워크 상태를 확인하세요.');
     return;
   }
   if (!currentImageElement){
