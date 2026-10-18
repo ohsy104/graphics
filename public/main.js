@@ -14,7 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // DOM
   const dropArea = document.getElementById('drop-area');
   const fileInput = document.getElementById('file-input');
-  const browseLabel = document.getElementById('browse');
+  // prefer the label[for=file-input] selector; fall back to id 'browse' if present
+  const browseLabel = document.querySelector('label[for="file-input"]') || document.getElementById('browse');
   const classifyBtn = document.getElementById('classify');
   const top3El = document.getElementById('top3');
   const historyEl = document.getElementById('history');
@@ -71,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (dropArea){
     ['dragenter','dragover'].forEach(evt => dropArea.addEventListener(evt, (e)=>{
       e.preventDefault(); e.stopPropagation();
-      try{ if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; }catch(_){}
+      try{ if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; }catch(_){ }
       dropArea.classList.add('dragover');
     }));
 
@@ -106,11 +107,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Clear fileInput on label click to allow selecting same file again
+  // Make browseLabel reliably open the file picker even if it's not a label-for
   if (browseLabel && fileInput){
-    browseLabel.addEventListener('click', ()=>{
+    browseLabel.addEventListener('click', (ev)=>{
       try{ fileInput.value = null; }catch(e){}
-      // allow browser default to open the picker via label-for
+      // If the element is not a <label> (some themes use a button), trigger the input click as fallback
+      if (browseLabel.tagName && browseLabel.tagName.toLowerCase() !== 'label'){
+        try{ fileInput.click(); }catch(_){ }
+      }
     });
   }
 
@@ -163,7 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderHistory(){
     if (!historyEl) return;
     historyEl.innerHTML = '';
-    if (predictionHistory.length===0){ historyEl.innerHTML = '<div class="small-note">아직 예측 이력이 없습니다.</div>'; return; }
+    if (predictionHistory.length===0){ historyEl.innerHTML = '<div class="small-note">아�� 예측 이력이 없습니다.</div>'; return; }
     for (const it of predictionHistory){
       const row = document.createElement('div'); row.className = 'history-item';
       const thumb = document.createElement('div'); thumb.className = 'thumb'; const img = new Image(); img.src = it.img; thumb.appendChild(img);
@@ -188,7 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ctx.drawImage(currentImageElement,0,0,cvs.width,cvs.height);
       const dataUrl = cvs.toDataURL('image/png');
       addHistoryItem(dataUrl, normalized[0].label, normalized[0].prob, normalized);
-      const banner = document.createElement('div'); banner.style.position='fixed'; banner.style.right='20px'; banner.style.top='92px'; banner.style.background='linear-gradient(90deg,#2fb64b,#0b8a3e)'; banner.style.color='white'; banner.style.padding='10px 14px'; banner.style.borderRadius='8px'; banner.style.boxShadow='0 6px 18px rgba(11,138,62,0.12)'; banner.style.fontWeight='700'; banner.innerText = `분류 결과: ${normalized[0].label} (${Math.round(normalized[0].prob*100)}%)`; document.body.appendChild(banner); setTimeout(()=>banner.remove(),2000);
+      const banner = document.createElement('div'); banner.style.position='fixed'; banner.style.right='20px'; banner.style.top='92px'; banner.style.background='linear-gradient(90deg,#2fb64b,#0b8a3e)'; banner.style.color='white'; banner.style.padding='8px 12px'; banner.style.borderRadius='8px'; banner.style.boxShadow='0 6px 18px rgba(11,138,62,0.12)'; banner.innerText = '분류 완료'; document.body.appendChild(banner); setTimeout(()=>banner.remove(),1500);
     }catch(e){ console.error('Classification failed', e); appendDebug('Classification failed: ' + (e && e.message)); alert('예측 중 오류가 발생했습니다. 콘솔을 확인해 주세요.'); }
   });
 
