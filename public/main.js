@@ -1,5 +1,5 @@
 // public/main.js
-// Fixed: ensure file input "찾아보기" works, robust listeners, debug logs
+// Final fixes: robust drag-and-drop, label-based file chooser, explicit pointer handling
 
 document.addEventListener('DOMContentLoaded', () => {
   console.log('main.js loaded (DOMContentLoaded)');
@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // DOM
   const dropArea = document.getElementById('drop-area');
   const fileInput = document.getElementById('file-input');
-  const browseBtn = document.getElementById('browse');
+  const browseLabel = document.getElementById('browse');
   const classifyBtn = document.getElementById('classify');
   const top3El = document.getElementById('top3');
   const historyEl = document.getElementById('history');
@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateClassifyButton(){ if (classifyBtn) classifyBtn.disabled = !(model && currentImageElement); }
 
   async function loadMetadata(){
-    const metadataURL = MODEL_BASE + (MODEL_BASE.endsWith('/')? '': '/') + 'metadata.json';
+    const metadataURL = MODEL_BASE + 'metadata.json';
     try{
       const res = await fetch(metadataURL);
       if (!res.ok) throw new Error('metadata fetch failed: ' + res.status);
@@ -40,14 +40,14 @@ document.addEventListener('DOMContentLoaded', () => {
       appendDebug('Loaded metadata labels: ' + JSON.stringify(LABELS));
     }catch(e){
       console.warn('Could not load metadata.json:', e);
-      appendDebug('Could not load metadata.json: ' + e.message);
+      appendDebug('Could not load metadata.json: ' + (e && e.message));
     }
   }
 
   async function autoLoadModel(){
     setModelStatus('로딩 중...');
     await loadMetadata();
-    const modelURL = MODEL_BASE + (MODEL_BASE.endsWith('/')? '': '/') + 'model.json';
+    const modelURL = MODEL_BASE + 'model.json';
     try{
       model = await tmImage.load(modelURL, modelURL.replace('model.json','metadata.json'));
       console.log('Model loaded:', modelURL);
@@ -57,36 +57,61 @@ document.addEventListener('DOMContentLoaded', () => {
     }catch(e){
       console.error('Model load failed:', e);
       setModelStatus('로드 실패 — 콘솔 확인');
-      appendDebug('Model load failed: ' + (e.message || e));
+      appendDebug('Model load failed: ' + (e && e.message));
     }
   }
 
   autoLoadModel();
 
-  // drag & drop handlers
+  // Global dragover/drop preventDefault so browser doesn't open file
+  window.addEventListener('dragover', (e)=>{ e.preventDefault(); });
+  window.addEventListener('drop', (e)=>{ e.preventDefault(); });
+
+  // Setup drop area
   if (dropArea){
-    ['dragenter','dragover'].forEach(evt => dropArea.addEventListener(evt, (e)=>{ e.preventDefault(); e.stopPropagation(); dropArea.classList.add('dragover'); }));
-    ['dragleave','dragend','drop'].forEach(evt => dropArea.addEventListener(evt, (e)=>{ e.preventDefault(); e.stopPropagation(); dropArea.classList.remove('dragover'); }));
-    dropArea.addEventListener('drop', (e)=>{ const dt = e.dataTransfer; if (!dt || !dt.files || dt.files.length===0) return; handleFile(dt.files[0]); });
+    ['dragenter','dragover'].forEach(evt => dropArea.addEventListener(evt, (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      try{ if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; }catch(_){}
+      dropArea.classList.add('dragover');
+    }));
+
+    ['dragleave','dragend'].forEach(evt => dropArea.addEventListener(evt, (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dropArea.classList.remove('dragover');
+    }));
+
+    dropArea.addEventListener('drop', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dropArea.classList.remove('dragover');
+      let file = null;
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length>0){
+        file = e.dataTransfer.files[0];
+      } else if (e.dataTransfer && e.dataTransfer.items && e.dataTransfer.items.length>0){
+        const item = e.dataTransfer.items[0];
+        if (item.kind === 'file') file = item.getAsFile();
+      }
+      if (file) handleFile(file);
+      else appendDebug('Drop received but no file found');
+    });
   } else {
     console.warn('dropArea element not found');
   }
 
-  // Ensure browse button and file input work
-  if (browseBtn && fileInput){
-    browseBtn.addEventListener('click', ()=> {
-      try{ fileInput.click(); }
-      catch(err){ console.error('fileInput.click() failed', err); appendDebug('fileInput.click() failed: ' + err.message); }
-    });
-
+  // Ensure file input works reliably; reset value before open so same file can be re-selected
+  if (fileInput){
     fileInput.addEventListener('change', (e)=>{
       const f = e.target && e.target.files && e.target.files[0];
       if (f) handleFile(f);
-      else console.debug('file input change but no file selected');
+      else appendDebug('file input changed but no file selected');
     });
-  } else {
-    console.warn('browseBtn or fileInput not found', { browseBtn: !!browseBtn, fileInput: !!fileInput });
-    appendDebug('browse or file input missing');
+  }
+
+  // Clear fileInput on label click to allow selecting same file again
+  if (browseLabel && fileInput){
+    browseLabel.addEventListener('click', ()=>{
+      try{ fileInput.value = null; }catch(e){}
+      // allow browser default to open the picker via label-for
+    });
   }
 
   function handleFile(file){
@@ -151,13 +176,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!model){ alert('모델을 불러오지 못했습니다. 콘솔을 확인해 주세요.'); return; }
     if (!currentImageElement){ alert('사진을 넣어 주세요.'); return; }
     try{
-      // Do prediction
       const predictions = await model.predict(currentImageElement, false);
       const normalized = normalizePredictions(predictions);
       console.log('Predictions (normalized):', normalized);
       appendDebug('Predictions: ' + JSON.stringify(normalized));
       renderTop3(normalized);
-      // capture image data url
       const cvs = document.createElement('canvas');
       cvs.width = currentImageElement.naturalWidth || currentImageElement.width;
       cvs.height = currentImageElement.naturalHeight || currentImageElement.height;
