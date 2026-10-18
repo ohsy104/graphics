@@ -28,7 +28,7 @@ Teachable Machine(구글)의 모델을 GitHub 리포지터리에 올려 Vercel�
 2. Export > TensorFlow.js 탭 선택
 3. "Download my model" 클릭해서 모델 파일들을 다운로드
 4. 압축을 풀고 `public/models/<your-model-name>/` 폴더로 업로드
-   - 예: `public/models/my-model/model.json`, `public/models/my-model/metadata.json`, `...bin`
+   - 예: `public/models/my-model/model.json`, `public/models/my-model/metadata.json`, `public/models/my-model/group1-shard1of1.bin`
 
 모델을 리포지터리에 직접 넣지 않고 외부 호스팅(예: Google Drive, S3, CDN)을 원하면 모델 URL을 환경 변수로 설정해 사용하세요.
 
@@ -38,25 +38,12 @@ Teachable Machine(구글)의 모델을 GitHub 리포지터리에 올려 Vercel�
 다음은 브라우저에서 Teachable Machine의 TensorFlow.js 모델을 로드하는 간단한 예시입니다.
 
 ```javascript
-// 예: public/models/my-model/model.json 위치에 모델이 있을 때
+// public/models/my-model/model.json 위치에 모델이 있을 때
 const modelURL = 'models/my-model/model.json';
 const metadataURL = 'models/my-model/metadata.json';
 
 // tmImage 라이브러리 사용 (Teachable Machine 제공)
 const model = await tmImage.load(modelURL, metadataURL);
-
-// webcam 사용 예시
-const webcam = new tmImage.Webcam(400, 400, true);
-await webcam.setup();
-await webcam.play();
-document.getElementById('webcam-container').appendChild(webcam.canvas);
-
-async function predict() {
-  const prediction = await model.predict(webcam.canvas);
-  // prediction은 레이블별 확률 배열
-  console.log(prediction);
-}
-setInterval(predict, 200);
 ```
 
 - 모델 종류에 따라 tmImage / tmPose / tmAudio 중 해당 라이브러리를 사용하세요.
@@ -90,9 +77,93 @@ setInterval(predict, 200);
 
 ---
 
-## 환경 변수 예시 (외부 모델 사용 시)
-- MODEL_BASE_URL=https://cdn.example.com/models/my-model
-클라이언트 코드에서는 base URL을 환경 변수로 읽어서 `modelURL = `${MODEL_BASE_URL}/model.json`` 처럼 사용합니다.
+## 모델 파일을 repo에 넣는 구체적 방법 (권장)
+아래 방법 중 편한 방법을 사용하세요. 파일당 100MB 초과 시 GitHub 웹 업로드는 실패하므로 Git LFS 사용을 권장합니다.
+
+방법 A — 터미널(git)
+```bash
+# 리포지터리 루트로 이동
+cd /path/to/graphics
+
+# 모델 디렉터리 생성
+mkdir -p public/models/my-model
+
+# Teachable Machine에서 받은 파일을 복사
+cp /path/to/downloaded/model.json public/models/my-model/
+cp /path/to/downloaded/metadata.json public/models/my-model/
+cp /path/to/downloaded/*.bin public/models/my-model/
+
+# .gitignore 확인 (필요하면 예외 추가)
+# 예: .gitignore에 *.bin이나 public/models/가 무시되어 있으면 아래 예외를 추가
+# echo -e "\n!public/models/\n!public/models/**" >> .gitignore
+
+# 커밋 & 푸시
+git add public/models/my-model
+git commit -m "Add Teachable Machine model files"
+git push origin main
+```
+
+방법 B — Git LFS (파일 >100MB 또는 권장)
+```bash
+# Git LFS 설치 및 초기화 (한 번만)
+git lfs install
+
+# .bin 파일을 LFS로 추적
+git lfs track "public/models/**/*.bin"
+# 생성된 .gitattributes를 커밋
+git add .gitattributes
+
+# 모델 파일 추가 및 푸시
+git add public/models/my-model
+git commit -m "Add Teachable Machine model files (via Git LFS)"
+git push origin main
+```
+
+방법 C — GitHub 웹 UI (간단하지만 파일당 100MB 제한)
+1. https://github.com/ohsy104/graphics → main 브랜치로 이동
+2. Add file → Upload files → `public/models/my-model/` 폴더로 드래그하여 업로드
+3. Commit changes 클릭
+
+---
+
+## .gitignore / .gitattributes 설정 (권장 예시)
+`.gitignore` 예시 (이 repo에 추가됨):
+
+```gitignore
+node_modules
+dist
+.vercel
+.DS_Store
+
+# 모델 파일은 추적하도록 예외를 둠
+!public/models/
+!public/models/**
+```
+
+`.gitattributes` 예시 (Git LFS 사용 시 자동 생성됨):
+
+```
+public/models/**/*.bin filter=lfs diff=lfs merge=lfs -text
+```
+
+---
+
+## Vercel 배포 후 확인
+배포가 완료되면 다음 URL 형식으로 모델 파일에 접근 가능한지 확인하세요:
+
+```
+https://<your-vercel-project>.vercel.app/models/my-model/model.json
+```
+
+로컬 테스트:
+```bash
+npx serve public
+# 또는
+npm install -g serve
+serve public
+# 브라우저에서
+http://localhost:3000/models/my-model/model.json
+```
 
 ---
 
@@ -101,6 +172,7 @@ setInterval(predict, 200);
 - [ ] 모델 파일을 `public/models/<name>/`에 업로드
 - [ ] index.html / main.js에서 모델 경로가 올바른지 확인
 - [ ] 로컬에서 모델이 정상 작동하는지 확인
+- [ ] Git LFS 필요 시 설정 완료
 - [ ] GitHub에 푸시 후 Vercel에 연결하여 배포
 - [ ] 배포된 URL로 수업에서 시연
 
