@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>AI 세계기후탐험대 — 평가 화면</title>
+  <title>AI 세계기후탐험대 — 데모</title>
   <style>
     :root{
       --header-bg:#063e1a;
@@ -16,51 +16,48 @@
       --accent:#2fb64b;
       --danger:#f0625d;
     }
-    html,body{height:100%;margin:0;font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;background:var(--page-bg);color:#0b2e10}
-    header{background:var(--header-bg);color:var(--header-fg);padding:1rem;text-align:center}
+    html,body{height:100%;margin:0;font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;background:var(--page-bg);color:#0b2e10}
+    header{background:var(--header-bg);color:var(--header-fg);padding:1rem 1.25rem;text-align:center}
     header h1{margin:0;font-size:1.6rem}
     .container{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:1rem;padding:1rem;height:calc(100vh - 76px);box-sizing:border-box}
     .card{border:1px solid var(--card-border);border-radius:10px;padding:1rem;box-shadow:0 4px 14px rgba(10,10,10,0.04);overflow:auto}
     .left-card{background:var(--left-card-bg)}
     .right-card{background:var(--right-card-bg)}
 
-    #drop-area{width:100%;max-width:420px;height:260px;border:2px dashed rgba(11,138,62,0.18);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg, rgba(255,255,255,0.6), rgba(250,255,245,0.6));transition:all .15s}
+    /* Drop area */
+    #drop-area{width:min(420px,25vw);height:min(420px,25vh);border:2px dashed rgba(11,138,62,0.18);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;backdrop-filter: blur(0.5px)}
     #drop-area.dragover{border-color:var(--primary);background:linear-gradient(180deg, #ffffff, #f7fff6);box-shadow:0 6px 18px rgba(11,138,62,0.06)}
-    #drop-area img{max-width:100%;max-height:100%;border-radius:8px}
+    #drop-area img{max-width:100%;max-height:100%;border-radius:8px;object-fit:contain}
     #drop-area .hint{color:#196f3a;font-weight:600}
     #drop-area small{color:#6b6b6b}
+    #preview{width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    #preview img{max-width:100%;max-height:100%;display:block;border-radius:8px}
+    #preview.placeholder{display:flex;align-items:center;justify-content:center;text-align:center}
 
+    #controls-top{display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem;z-index:1}
     #controls{display:flex;gap:0.5rem;align-items:center;margin-top:0.6rem}
     button.primary{background:var(--primary);color:white;border:none;padding:0.6rem 0.9rem;border-radius:8px;cursor:pointer;font-weight:600}
-    button.ghost{background:white;border:1px solid #ddd;padding:0.5rem 0.8rem;border-radius:8px;cursor:pointer}
+    .ghost, button.ghost{background:white;border:1px solid #ddd;padding:0.5rem 0.8rem;border-radius:8px;cursor:pointer}
+    .ghost:focus, button:focus{outline:2px solid rgba(11,138,62,0.18)}
     button:disabled{opacity:0.6;cursor:not-allowed}
 
     .small-note{font-size:0.88rem;color:#555;margin-top:0.6rem}
 
-    table.confusion{border-collapse:collapse;width:100%;text-align:center}
-    table.confusion th, table.confusion td{border:1px solid #ddd;padding:0.5rem}
-    table.confusion th{background:#fafafa}
-    .cell-correct{background:#c8f1bf}
-    .cell-wrong{background:#f7bcbc}
+    .history{display:flex;flex-direction:column;gap:0.6rem}
+    .history-item{display:flex;gap:0.6rem;align-items:center}
+    .thumb{width:84px;height:64px;border:1px solid #ddd;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#fff}
+    .thumb img{max-width:100%;max-height:100%;display:block}
+    .pred-info{font-size:0.95rem}
 
-    .bars{display:flex;flex-direction:column;gap:0.6rem}
-    .bar-row{display:flex;align-items:center;gap:0.6rem}
-    .bar-label{width:120px;font-size:0.95rem}
-    .bar-track{flex:1;background:#eee;height:18px;border-radius:9px;overflow:hidden}
-    .bar-fill{height:100%;background:linear-gradient(90deg,#88e27a,#2fb64b)}
-    .percent{width:48px;text-align:right;font-size:0.95rem}
-
-    .gallery{display:flex;flex-wrap:wrap;gap:0.5rem}
-    .thumb{width:96px;height:72px;border:1px solid #ddd;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:11px;flex-direction:column;background:#fff;padding:4px}
-    .thumb img{max-width:100%;max-height:56px;display:block}
-
-    .error-box{margin-top:0.8rem;padding:0.6rem;border-radius:6px;background:#fff3f3;border:1px solid #f1cfcf}
+    .top3{display:flex;flex-direction:column;gap:0.4rem}
+    .top3-row{display:flex;justify-content:space-between}
+    .debug{margin-top:0.8rem;font-size:0.85rem;color:#444}
 
     footer{padding:0.6rem 1rem;text-align:right;font-size:0.85rem;color:#666}
 
     @media(max-width:900px){
       .container{grid-template-columns:1fr;grid-template-rows:auto auto auto auto;height:auto}
-      #drop-area{max-width:100%}
+      #drop-area{max-width:100%;width:100%;height:32vh}
     }
   </style>
 </head>
@@ -70,51 +67,51 @@
   </header>
 
   <div class="container">
+    <!-- LEFT TOP: drag & drop input -->
     <section class="card left-card" id="left-top">
       <h2>사진 넣기</h2>
       <div id="input-area">
-        <div id="drop-area">
-          <div class="hint">여기에 사진을 끌어다 놓으세요</div>
-          <small>또는 찾아보기로 선택</small>
-        </div>
-        <div id="controls">
+        <div id="controls-top">
+          <!-- use native label-for to open file chooser reliably -->
           <input type="file" id="file-input" accept="image/*" style="display:none">
-          <button class="ghost" id="browse">찾아보기</button>
+          <label for="file-input" class="ghost" id="browse" style="display:inline-block; cursor:pointer; user-select:none;">찾아보기</label>
           <button class="primary" id="classify" disabled>분류하기</button>
         </div>
-        <div class="small-note">사진을 넣고 실제 레이블을 선택한 뒤 분류 버튼을 누르면 결과가 기록됩니다.</div>
-        <div style="margin-top:0.6rem">
-          <label for="truth-select">실제 레이블: </label>
-          <select id="truth-select">
-            <option value="0">열대기후</option>
-            <option value="1">한대기후</option>
-            <option value="2">온대기후</option>
-          </select>
+        <div id="drop-area">
+          <div id="preview" class="placeholder">
+            <div style="text-align:center">
+              <div class="hint">여기에 사진을 끌어다 놓으세요</div>
+              <small>또는 위의 찾아보기를 사용하세요</small>
+            </div>
+          </div>
         </div>
+        <div class="small-note">사진을 넣고 분류하기를 누르면 모델의 예측을 보여줍니다.</div>
       </div>
     </section>
 
+    <!-- RIGHT TOP: top-3 predictions -->
     <section class="card right-card" id="right-top">
-      <h2>혼동행렬</h2>
-      <div id="confusion-container">
-        <table class="confusion" id="confusion-table"></table>
+      <h2>Top-3 예측</h2>
+      <div id="top3" class="top3">
+        <div class="top3-row">예측 결과가 여기에 표시됩니다.</div>
       </div>
-      <div class="small-note" style="margin-top:0.5rem">정분류 셀은 연두색, 오분류 셀은 붉은색으로 표시됩니다.</div>
+      <div class="small-note" style="margin-top:0.6rem" id="model-status">모델 로드 상태: 로딩 중...</div>
+      <div class="debug" id="debug-area"></div>
     </section>
 
+    <!-- LEFT BOTTOM: prediction history -->
     <section class="card left-card" id="left-bottom">
-      <h2>클래스별 정분류율</h2>
-      <div class="bars" id="bars-container"></div>
-      <div class="small-note">각 클래스의 정분류율(%)을 보여줍니다.</div>
+      <h2>예측 이력</h2>
+      <div id="history" class="history">
+        <div class="small-note">아직 예측 이력이 없습니다.</div>
+      </div>
     </section>
 
+    <!-- RIGHT BOTTOM: info -->
     <section class="card right-card" id="right-bottom">
-      <h2>틀린 사진 모음 / 정확도 오류</h2>
-      <div id="gallery" class="gallery"></div>
-      <div class="error-box" id="error-box">
-        <strong>정확도 오류 (정확도 &lt; 75%)</strong>
-        <ul id="error-list"></ul>
-      </div>
+      <h2>정보</h2>
+      <div class="small-note">모델: Teachable Machine 외부 모델을 사용합니다.</div>
+      <div class="small-note" style="margin-top:0.6rem">모델 정확도가 낮게 나오면 브라우저 콘솔을 열어 예측 배열을 확인해 주세요. 디버그 정보는 아래에 표시됩니다.</div>
     </section>
   </div>
 
