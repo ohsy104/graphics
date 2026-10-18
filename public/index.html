@@ -34,7 +34,8 @@
     #controls-top{display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem}
     #controls{display:flex;gap:0.5rem;align-items:center;margin-top:0.6rem}
     button.primary{background:var(--primary);color:white;border:none;padding:0.6rem 0.9rem;border-radius:8px;cursor:pointer;font-weight:600}
-    button.ghost{background:white;border:1px solid #ddd;padding:0.5rem 0.8rem;border-radius:8px;cursor:pointer}
+    .ghost, button.ghost{background:white;border:1px solid #ddd;padding:0.5rem 0.8rem;border-radius:8px;cursor:pointer}
+    .ghost:focus, button:focus{outline:2px solid rgba(11,138,62,0.18)}
     button:disabled{opacity:0.6;cursor:not-allowed}
 
     .small-note{font-size:0.88rem;color:#555;margin-top:0.6rem}
@@ -68,8 +69,9 @@
       <h2>사진 넣기</h2>
       <div id="input-area">
         <div id="controls-top">
+          <!-- use native label-for to open file chooser reliably -->
           <input type="file" id="file-input" accept="image/*" style="display:none">
-          <button class="ghost" id="browse">찾아보기</button>
+          <label for="file-input" class="ghost" id="browse" style="display:inline-block; cursor:pointer; user-select:none;">찾아보기</label>
           <button class="primary" id="classify" disabled>분류하기</button>
         </div>
         <div id="drop-area">
