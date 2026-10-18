@@ -4,7 +4,10 @@
 document.addEventListener('DOMContentLoaded', () => {
   console.log('main.js loaded (DOMContentLoaded)');
 
-  const MODEL_BASE = 'https://teachablemachine.withgoogle.com/models/4E3fH9sQf/';
+  // Prefer a local model placed under public/models/my-model/
+  const LOCAL_MODEL_DIR = 'models/my-model/';
+  const REMOTE_MODEL_BASE = 'https://teachablemachine.withgoogle.com/models/4E3fH9sQf/';
+  let MODEL_BASE = REMOTE_MODEL_DIR; // will be set after existence check
   const UNCERT_THRESHOLD = 0.75;
 
   let LABELS = [];
@@ -57,12 +60,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // Check for a local model first; if not present, fall back to the remote MODEL_BASE
+  async function chooseModelBase(){
+    try{
+      // Use HEAD to avoid downloading the full model; some hosts may not support HEAD -> fallback to GET
+      let res = await fetch(LOCAL_MODEL_DIR + 'model.json', {method:'HEAD'});
+      if (!res.ok){
+        // try GET as a fallback (some static hosts/servers don't respond to HEAD)
+        res = await fetch(LOCAL_MODEL_DIR + 'model.json');
+      }
+      if (res.ok){ MODEL_BASE = LOCAL_MODEL_DIR; debug('Using local model base: ' + MODEL_BASE); return; }
+    }catch(e){ debug('Local model check failed: ' + (e && e.message)); }
+    MODEL_BASE = REMOTE_MODEL_BASE; debug('Falling back to remote model base: ' + MODEL_BASE);
+  }
+
   async function loadModel(){
     setModelStatus('로딩 중...');
+    await chooseModelBase();
     await loadMetadata();
     try{
       const modelURL = MODEL_BASE + 'model.json';
-      model = await tmImage.load(modelURL, modelURL.replace('model.json','metadata.json'));
+      model = await tmImage.load(modelURL, MODEL_BASE + 'metadata.json');
       setModelStatus('로드 완료'); debug('Model loaded: ' + modelURL);
     }catch(e){ console.error('Model load failed', e); setModelStatus('로드 실패 — 콘솔 확인'); }
   }
@@ -170,11 +188,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function addToGallery(dataUrl, filename, predLabel, truthLabel, prob){
     if (!galleryEl) return; const thumb = document.createElement('div'); thumb.className='thumb';
-    const img = document.createElement('img'); img.src = dataUrl; const meta = document.createElement('div'); meta.className='meta'; meta.innerText = `${filename}\n(예측: ${predLabel}, 실제: ${truthLabel}, ${Math.round(prob*100)}%)`;
+    const img = document.createElement('img'); img.src = dataUrl; const meta = document.createElement('div'); meta.className='meta'; meta.innerText = `${filename}\n(예측: ${predLabel}, 실제: ${truthLabel}, 확률: ${((prob||0)*100).toFixed(1)}%)`;
     thumb.appendChild(img); thumb.appendChild(meta); galleryEl.prepend(thumb);
   }
 
-  function ensureLabelInMatrix(label){ if (labelsWithUncert.includes(label)) return; labelsWithUncert.splice(labelsWithUncert.length-1,0,label); const n = labelsWithUncert.length; matrix = matrix.map(r=>{ r.splice(n-2,0,0); return r; }); matrix.splice(n-2,0,Array(n).fill(0)); }
+  function ensureLabelInMatrix(label){ if (labelsWithUncert.includes(label)) return; labelsWithUncert.splice(labelsWithUncert.length-1,0,label); const n = labelsWithUncert.length; matrix = matrix.map(r=>{ const nr = r.slice(); nr.splice(n-1,0,0); return nr; }); matrix.push(Array(n).fill(0)); }
 
   async function classifyCurrent(){
     if (!preview || !preview.querySelector('img')){ alert('이미지를 넣어 주세요.'); return; }
@@ -202,7 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // render helpers (polluted earlier; bring them here)
   function renderConfusion(){
-    if (!confusionContainer) return; const labels = labelsWithUncert; const table = document.createElement('table'); table.className='confusion'; const thead=document.createElement('thead'); const hrow=document.createElement('tr'); const corner=document.createElement('th'); corner.innerText='실제 \\ 예측'; hrow.appendChild(corner); for(const l of labels){ const th=document.createElement('th'); th.innerText=l; hrow.appendChild(th); } thead.appendChild(hrow); table.appendChild(thead); const tbody=document.createElement('tbody'); for(let i=0;i<labels.length;i++){ const tr=document.createElement('tr'); const th=document.createElement('th'); th.innerText=labels[i]; tr.appendChild(th); for(let j=0;j<labels.length;j++){ const td=document.createElement('td'); td.innerText=matrix[i][j]||0; const isUncert=(labels[j]==='불확실'); if(i===j && !isUncert && i < labels.length-1) td.className='cell-correct'; else if(matrix[i][j]>0 && (i!==j || isUncert)) td.className='cell-wrong'; tr.appendChild(td);} tbody.appendChild(tr);} table.appendChild(tbody); confusionContainer.innerHTML=''; confusionContainer.appendChild(table);
+    if (!confusionContainer) return; const labels = labelsWithUncert; const table = document.createElement('table'); table.className='confusion'; const thead=document.createElement('thead'); const hrow=document.createElement('tr'); const corner=document.createElement('th'); corner.innerText='실제 \\ 예측'; hrow.appendChild(corner); for(const l of labels){ const th=document.createElement('th'); th.innerText=l; hrow.appendChild(th);} thead.appendChild(hrow); table.appendChild(thead); const tbody=document.createElement('tbody'); for(let i=0;i<labels.length;i++){ const tr=document.createElement('tr'); const th=document.createElement('th'); th.innerText=labels[i]; tr.appendChild(th); for(let j=0;j<labels.length;j++){ const td=document.createElement('td'); td.innerText=matrix[i][j]||0; const isUncert=labels[j]==='불확실'; if(i===j && !isUncert && i<labels.length-1) td.className='cell-correct'; else if(matrix[i][j]>0 && (i!==j || isUncert)) td.className='cell-wrong'; tr.appendChild(td);} tbody.appendChild(tr);} table.appendChild(tbody); confusionContainer.innerHTML=''; confusionContainer.appendChild(table);
   }
   function renderStats(){ if(accuracyEl) accuracyEl.innerText = totalCount===0 ? '-' : ((correctCount/totalCount)*100).toFixed(1) + '%'; }
 
