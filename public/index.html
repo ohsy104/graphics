@@ -53,6 +53,9 @@
     #accuracy{font-size:1.1rem;font-weight:700}
     #model-status{font-size:13px;color:var(--muted);margin-top:6px}
 
+    /* full-screen drop overlay (initially hidden) */
+    #drop-overlay{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.02);}
+
     @media(max-width:900px){
       .layout{grid-template-columns:1fr}
       #preview img{width:min(42vw, 300px)}
@@ -60,6 +63,9 @@
   </style>
 </head>
 <body>
+  <!-- Full-screen transparent overlay to reliably capture drops on all browsers -->
+  <div id="drop-overlay" aria-hidden="true"></div>
+
   <div class="top-box">
     <h1>AI 기후 탐험대</h1>
   </div>
@@ -78,7 +84,7 @@
 
         <div class="controls">
           <input type="file" id="file-input" accept="image/*" style="display:none">
-          <label for="file-input">찾아보기</label>
+          <label for="file-input" id="browse" style="display:inline-block; cursor:pointer; user-select:none;">찾아보기</label>
           <select id="truth-select" aria-label="실제 레이블">
             <option value="">(실제 레이블 선택)</option>
           </select>
