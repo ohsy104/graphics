@@ -1,1 +1,378 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 기후 탐험대 - 교사용 평가</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sky: #dff1f7; --ink: #1f3a4d; --sand: #f6e7c1; --blue: #2f6fed;
+    --ok: #cdeccb; --ok-strong: #7fcf86; --bad: #fbd0d0; --bad-strong: #f08a8a;
+    --line: #dfe6ea; --muted: #6b7f8c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 28px 16px 56px;
+    font-family: "Noto Sans KR", sans-serif; color: var(--ink);
+    background: linear-gradient(180deg, var(--sky) 0%, #f4fafc 45%, var(--sand) 100%);
+  }
+  header { text-align: center; margin-bottom: 24px; }
+  h1 { font-family: "Jua", "Noto Sans KR", sans-serif; font-size: clamp(2rem, 6vw, 2.6rem); margin: 0 0 6px; }
+  .subtitle { margin: 0; color: #44606f; font-weight: 700; }
+  .zones { display: flex; justify-content: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .zones span { padding: 3px 12px; border-radius: 999px; color: #fff; font-size: .85rem; font-weight: 700; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1100px; margin: 0 auto; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: #fff; border-radius: 16px; padding: 22px; box-shadow: 0 4px 18px rgba(31,58,77,.12); min-width: 0; }
+  .card h2 { font-size: 1.05rem; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  .hint { color: var(--muted); font-size: .85rem; line-height: 1.5; }
+
+  /* 파일 선택 영역 */
+  .file-box { background: #f4f7f9; border-radius: 10px; padding: 10px; margin: 8px 0 12px; font-size: .9rem; }
+  .btn-row { display: flex; gap: 10px; }
+  button {
+    font-family: inherit; font-weight: 700; font-size: .95rem; border: 0; border-radius: 10px;
+    padding: 12px 16px; cursor: pointer;
+  }
+  button:focus-visible { outline: 3px solid #f2a33a; outline-offset: 2px; }
+  #runBtn { flex: 1; background: var(--blue); color: #fff; }
+  #runBtn:disabled { background: #9db6ee; cursor: not-allowed; }
+  #resetBtn { background: #e8edf1; color: var(--ink); }
+  #csvBtn { background: #1f3a4d; color: #fff; margin-top: 12px; width: 100%; }
+  #csvBtn:disabled { background: #a8b5bd; cursor: not-allowed; }
+  .acc-label { margin-top: 14px; font-weight: 700; font-size: .9rem; }
+  .acc-num { font-size: 2.4rem; font-weight: 700; color: var(--blue); }
+  .acc-num small { font-size: 1rem; color: var(--muted); font-weight: 400; }
+  #modelState { font-size: .85rem; font-weight: 700; color: #1d8a3f; margin-top: 6px; }
+  #modelState.err { color: #c0392b; }
+  progress { width: 100%; height: 8px; margin-top: 8px; }
+  #warn { color: #b9650a; font-size: .85rem; margin-top: 8px; }
+
+  /* 클래스별 정분류율 막대 */
+  .cls-row { margin-bottom: 14px; }
+  .cls-head { display: flex; justify-content: space-between; font-weight: 700; margin-bottom: 4px; }
+  .track { background: #e6ebee; border-radius: 999px; height: 22px; overflow: hidden; }
+  .fill { height: 100%; border-radius: 999px; background: #3fae6a; width: 0; transition: width .4s; }
+  .empty { color: #9aa9b3; text-align: center; padding: 40px 0; font-size: .9rem; }
+
+  /* 혼동행렬: 모든 칸 너비 동일, 가운데 정렬 */
+  .cm-wrap { overflow-x: auto; }
+  table.cm { width: 100%; min-width: 420px; table-layout: fixed; border-collapse: collapse; }
+  table.cm th, table.cm td {
+    width: 20%; text-align: center; vertical-align: middle;
+    border: 1px solid #c9d3d9; padding: 10px 4px; font-size: .9rem;
+  }
+  table.cm th { background: #eef3f6; }
+  table.cm th { padding: 12px 4px; }
+  td.good { background: #c8f0c3; }                 /* 정분류 칸: 항상 연두색 */
+  td.wrong { background: #fff; }                   /* 오분류 칸: 0이면 흰색 */
+  td.wrong.has { background: #f9bcbc; }            /* 오분류가 있으면 붉은색 */
+
+  /* 틀린 사진 모아보기 */
+  #wrongGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+  .wcard { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fafcfd; }
+  .wcard img { width: 100%; height: 110px; object-fit: cover; display: block; }
+  .wcard .meta { padding: 8px; font-size: .78rem; line-height: 1.5; word-break: break-all; }
+  .wcard .fname { font-weight: 700; }
+  .wcard .pred { color: #c0392b; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧭 AI 기후 탐험대</h1>
+  <p class="subtitle">열대기후, 온대기후, 한대기후 구분하기 · 교사용 평가 화면</p>
+  <div class="zones">
+    <span style="background:#f2a33a">열대기후</span>
+    <span style="background:#2e9e6b">온대기후</span>
+    <span style="background:#5aa9e6">한대기후</span>
+  </div>
+</header>
+
+<div class="grid">
+  <!-- 1. 테스트 사진 넣기 -->
+  <section class="card">
+    <h2>1. 테스트 사진 넣기</h2>
+    <div class="hint">테스트 이미지 일괄 업로드 (여러 장 선택)<br>
+      파일 이름의 밑줄 앞부분이 실제 클래스예요. 예) 열대기후_01.jpg, 온대_02.png<br>
+      확신도가 75% 미만이면 「불확실」로 분류하고 오답으로 계산해요.</div>
+    <div class="file-box"><input type="file" id="files" accept="image/*" multiple></div>
+    <div class="btn-row">
+      <button id="runBtn" disabled>모델 성능 평가 실행</button>
+      <button id="resetBtn">초기화</button>
+    </div>
+    <div class="hint" id="count" style="margin-top:10px">선택된 사진 0장 · 판정 대기 중</div>
+    <progress id="prog" value="0" max="1" hidden></progress>
+    <div id="warn"></div>
+    <div class="acc-label">전체 정확도 (Accuracy)</div>
+    <div class="acc-num"><span id="accNum">0.0%</span> <small id="accSub">(0/0)</small></div>
+    <div id="modelState">⏳ 모델을 불러오는 중...</div>
+    <button id="csvBtn" disabled>📥 결과 CSV 내려받기</button>
+    <div class="hint" style="margin-top:10px">🔒 사진은 이 브라우저 안에서만 처리되고 외부로 전송되지 않아요.</div>
+  </section>
+
+  <!-- 2. 클래스별 정분류율 -->
+  <section class="card">
+    <h2>2. 클래스별 정분류율</h2>
+    <div id="clsBox"><div class="empty">테스트 평가를 실행하면 클래스별 정분류율이 표시돼요.</div></div>
+  </section>
+
+  <!-- 3. 혼동행렬 -->
+  <section class="card">
+    <h2>3. 혼동행렬</h2>
+    <div class="cm-wrap"><table class="cm" id="cm"></table></div>
+    <div class="hint" style="margin-top:10px">연두색 = 정분류, 붉은색 = 오분류·불확실</div>
+  </section>
+
+  <!-- 4. 틀린 사진 모아보기 -->
+  <section class="card">
+    <h2>4. 틀린 사진 모아보기 (<span id="wrongCount">0</span>장)</h2>
+    <div id="wrongGrid"><div class="empty" style="grid-column:1/-1">오분류된 테스트 이미지가 존재하지 않아요.</div></div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+<script>
+/* ===== 설정 ===== */
+const THRESHOLD = 0.75;          // 이 값 미만이면 「불확실」
+const UNSURE = "불확실";
+// 모델 위치를 위에서부터 차례로 시도 (같은 폴더 → models/my-model → 티처블머신 서버)
+const BASES = [
+  "./",
+  "./models/my-model/",
+  "/models/my-model/",
+  "https://teachablemachine.withgoogle.com/models/4E3fH9sQf/"
+];
+
+/* ===== 상태 ===== */
+let model = null;
+let classes = [];                // 모델의 클래스 이름들 (metadata.json의 labels)
+let results = [];                // 사진별 판정 결과
+let selected = [];               // 선택한 파일들
+
+const $ = (id) => document.getElementById(id);
+
+/* ===== 모델 불러오기 (model.json, metadata.json) ===== */
+async function loadModel() {
+  for (const base of BASES) {
+    try {
+      model = await tmImage.load(base + "model.json", base + "metadata.json");
+      classes = model.getClassLabels();
+      $("modelState").textContent = "✓ 모델 로드 완료 (정상)";
+      $("runBtn").disabled = selected.length === 0;
+      drawAll();
+      console.log("모델 불러오기 성공:", base);
+      return;
+    } catch (e) {
+      console.warn("모델 불러오기 실패:", base, e);
+    }
+  }
+  $("modelState").textContent = "⚠ 모델을 불러오지 못했어요. 새로고침 해 보세요.";
+  $("modelState").classList.add("err");
+}
+
+/* ===== 파일 이름 → 실제 클래스 ===== */
+// 밑줄 앞부분을 실제 클래스로 사용. "열대" 처럼 '기후'를 뺀 이름도 허용.
+function actualFromName(fileName) {
+  const base = fileName.replace(/\.[^.]+$/, "");
+  const prefix = base.split("_")[0].trim();
+  const norm = (s) => s.replace(/기후/g, "").trim().toLowerCase();
+  return classes.find((c) => c === prefix || norm(c) === norm(prefix)) || null;
+}
+
+/* ===== 이미지 한 장 읽어서 예측 ===== */
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function runEvaluation() {
+  clearResults();
+  $("runBtn").disabled = true;
+  $("prog").hidden = false;
+  $("prog").max = selected.length;
+  $("prog").value = 0;
+  const skipped = [];
+
+  for (let i = 0; i < selected.length; i++) {
+    const file = selected[i];
+    const actual = actualFromName(file.name);
+    if (!actual) { skipped.push(file.name); $("prog").value = i + 1; continue; }
+    try {
+      const url = URL.createObjectURL(file);       // 브라우저 안에서만 사용하는 임시 주소
+      const img = await loadImage(url);
+      const preds = await model.predict(img);      // 클래스별 확률
+      const top = preds.reduce((a, b) => (b.probability > a.probability ? b : a));
+      // 75% 미만이면 불확실
+      const pred = top.probability < THRESHOLD ? UNSURE : top.className;
+      results.push({
+        name: file.name, actual, pred, conf: top.probability, top: top.className,
+        probs: preds.map((p) => p.probability), url, ok: pred === actual
+      });
+    } catch (e) {
+      console.error("판정 실패:", file.name, e);
+      skipped.push(file.name);
+    }
+    $("prog").value = i + 1;
+    $("count").textContent = "판정 중... " + (i + 1) + " / " + selected.length + "장";
+  }
+
+  $("prog").hidden = true;
+  $("count").textContent = "선택된 사진 " + selected.length + "장 · 판정 완료 (" + results.length + "장 반영)";
+  $("warn").textContent = skipped.length
+    ? "⚠ 클래스를 알 수 없어 제외된 사진 " + skipped.length + "장: " + skipped.slice(0, 5).join(", ") + (skipped.length > 5 ? " ..." : "")
+    : "";
+  $("runBtn").disabled = false;
+  drawAll();
+}
+
+/* ===== 화면 그리기 ===== */
+function drawAll() {
+  drawAccuracy(); drawClassRates(); drawMatrix(); drawWrong();
+  $("csvBtn").disabled = results.length === 0;
+}
+
+// 전체 정확도
+function drawAccuracy() {
+  const n = results.length, c = results.filter((r) => r.ok).length;
+  $("accNum").textContent = (n ? (c / n) * 100 : 0).toFixed(1) + "%";
+  $("accSub").textContent = "(" + c + "/" + n + ")";
+}
+
+// 2. 클래스별 정분류율
+function drawClassRates() {
+  const box = $("clsBox");
+  if (!results.length) { box.innerHTML = '<div class="empty">테스트 평가를 실행하면 클래스별 정분류율이 표시돼요.</div>'; return; }
+  box.innerHTML = "";
+  classes.forEach((cls) => {
+    const rows = results.filter((r) => r.actual === cls);
+    const ok = rows.filter((r) => r.ok).length;
+    const pct = rows.length ? (ok / rows.length) * 100 : 0;
+    const d = document.createElement("div");
+    d.className = "cls-row";
+    d.innerHTML = '<div class="cls-head"><span></span><span></span></div><div class="track"><div class="fill"></div></div>';
+    d.querySelectorAll("span")[0].textContent = cls;
+    d.querySelectorAll("span")[1].textContent = rows.length ? pct.toFixed(1) + "% (" + ok + "/" + rows.length + ")" : "사진 없음";
+    box.appendChild(d);
+    requestAnimationFrame(() => (d.querySelector(".fill").style.width = pct + "%"));
+  });
+}
+
+// 3. 혼동행렬 (행: 실제, 열: 예측 + 불확실)
+function drawMatrix() {
+  const cols = classes.concat([UNSURE]);   // 열: 열대/온대/한대 + 불확실
+  const rows = classes.concat([UNSURE]);   // 행: 같은 순서 (불확실 행은 참고용, 항상 0)
+  const t = $("cm");
+  t.innerHTML = "";
+  // 머리글: 실제 ＼ 예측 + 각 예측 클래스 이름
+  let tr = document.createElement("tr");
+  const corner = document.createElement("th");
+  corner.textContent = "실제 ＼ 예측";
+  tr.appendChild(corner);
+  cols.forEach((c) => { const th = document.createElement("th"); th.textContent = c; tr.appendChild(th); });
+  t.appendChild(tr);
+  // 본문
+  rows.forEach((actual) => {
+    tr = document.createElement("tr");
+    const th = document.createElement("th");
+    th.textContent = actual;
+    tr.appendChild(th);
+    cols.forEach((pred) => {
+      const n = results.filter((r) => r.actual === actual && r.pred === pred).length;
+      const td = document.createElement("td");
+      td.textContent = n;
+      // 정분류(대각선)는 항상 연두색, 잘못 분류된 칸은 1장 이상이면 붉은색
+      if (pred === actual && actual !== UNSURE) td.className = "good";
+      else td.className = "wrong" + (n > 0 && actual !== UNSURE ? " has" : "");
+      tr.appendChild(td);
+    });
+    t.appendChild(tr);
+  });
+}
+
+// 4. 틀린 사진 모아보기 (파일명 포함)
+function drawWrong() {
+  const wrong = results.filter((r) => !r.ok);
+  $("wrongCount").textContent = wrong.length;
+  const g = $("wrongGrid");
+  g.innerHTML = "";
+  if (!wrong.length) {
+    g.innerHTML = '<div class="empty" style="grid-column:1/-1">오분류된 테스트 이미지가 존재하지 않아요.</div>';
+    return;
+  }
+  wrong.forEach((r) => {
+    const c = document.createElement("div");
+    c.className = "wcard";
+    const img = document.createElement("img");
+    img.src = r.url; img.alt = r.name;
+    const m = document.createElement("div");
+    m.className = "meta";
+    m.innerHTML = '<div class="fname"></div><div class="act"></div><div class="pred"></div>';
+    m.querySelector(".fname").textContent = r.name;
+    m.querySelector(".act").textContent = "실제: " + r.actual;
+    m.querySelector(".pred").textContent = "예측: " + r.pred +
+      (r.pred === UNSURE ? " (최고 " + r.top + " " : " (") + (r.conf * 100).toFixed(1) + "%)";
+    c.append(img, m);
+    g.appendChild(c);
+  });
+}
+
+/* ===== CSV 내려받기 ===== */
+function downloadCsv() {
+  const q = (v) => '"' + String(v).replace(/"/g, '""') + '"';
+  const head = ["파일명", "실제", "예측", "확신도(%)", "결과"].concat(classes.map((c) => c + "(%)"));
+  const lines = [head.map(q).join(",")];
+  results.forEach((r) => {
+    const status = r.ok ? "정답" : r.pred === UNSURE ? "불확실" : "오답";
+    lines.push([r.name, r.actual, r.pred, (r.conf * 100).toFixed(1), status]
+      .concat(r.probs.map((p) => (p * 100).toFixed(1))).map(q).join(","));
+  });
+  // 엑셀에서 한글이 깨지지 않도록 앞에 BOM 추가
+  const blob = new Blob(["\ufeff" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "ai_climate_eval.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ===== 초기화 ===== */
+function clearResults() {
+  results.forEach((r) => URL.revokeObjectURL(r.url));
+  results = [];
+}
+function resetAll() {
+  clearResults();
+  selected = [];
+  $("files").value = "";
+  $("count").textContent = "선택된 사진 0장 · 판정 대기 중";
+  $("warn").textContent = "";
+  $("runBtn").disabled = true;
+  drawAll();
+}
+
+/* ===== 이벤트 연결 ===== */
+$("files").addEventListener("change", (e) => {
+  selected = Array.from(e.target.files);
+  $("count").textContent = "선택된 사진 " + selected.length + "장 · 판정 대기 중";
+  $("runBtn").disabled = !model || selected.length === 0;
+});
+$("runBtn").addEventListener("click", runEvaluation);
+$("resetBtn").addEventListener("click", resetAll);
+$("csvBtn").addEventListener("click", downloadCsv);
+
+drawMatrix();   // 모델 로딩 전에도 빈 표 틀을 먼저 보여줌 (클래스 이름은 모델 로드 후 채워짐)
+loadModel();
+</script>
+</body>
+</html>
 
