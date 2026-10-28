@@ -104,14 +104,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
 <script>
   // 모델 파일 경로 (저장소 맨 위 models/my-model 폴더)
-  // 위에서부터 차례로 시도하고, 앞의 경로가 안 되면 다음 경로를 써요.
-  // 마지막은 티처블머신 서버 주소라서 폴더 위치가 틀려도 작동해요.
-  const BASES = [
-    "./models/my-model/",
-    "/models/my-model/",
-    "./public/models/my-model/",
-    "https://teachablemachine.withgoogle.com/models/4E3fH9sQf/"
-  ];
+  const BASE = "./models/my-model/";
   const COLORS = { "열대기후": "#f2a33a", "온대기후": "#2e9e6b", "한대기후": "#5aa9e6" };
 
   const statusEl = document.getElementById("status");
@@ -123,17 +116,13 @@
   let model = null;
 
   async function init() {
-    for (const base of BASES) {
-      try {
-        model = await tmImage.load(base + "model.json", base + "metadata.json");
-        console.log("모델 불러오기 성공:", base);
-        statusEl.textContent = "✨ 로딩 완료! 사진을 업로드해보세요.";
-        return;
-      } catch (e) {
-        console.warn("모델 불러오기 실패:", base, e);
-      }
+    try {
+      model = await tmImage.load(BASE + "model.json", BASE + "metadata.json");
+      statusEl.textContent = "✨ 로딩 완료! 사진을 업로드해보세요.";
+    } catch (e) {
+      console.error(e);
+      statusEl.textContent = "⚠️ 모델을 불러오지 못했어요. 새로고침 해 보세요.";
     }
-    statusEl.textContent = "⚠️ 모델을 불러오지 못했어요. 새로고침 해 보세요.";
   }
   init();
 
