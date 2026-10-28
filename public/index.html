@@ -1,66 +1,167 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>사진 업로드 데모</title>
-  <style>
-    :root{
-      --header-bg:#063e1a;
-      --page-bg:#f7fff9;
-      --card-bg:#ffffff;
-      --accent:#2fb64b;
-      --muted:#666;
-    }
-    body{margin:0;font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;background:var(--page-bg);color:#0b2e10}
-    .top-box{background:linear-gradient(90deg,#0b8a3e,#2fb64b);color:white;padding:24px 18px;text-align:center}
-    .top-box h1{margin:0;font-size:1.6rem}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 기후 탐험대</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sky: #dff1f7;
+    --ink: #1f3a4d;
+    --sand: #f6e7c1;
+    --leaf: #2e9e6b;
+    --sun: #f2a33a;
+    --ice: #5aa9e6;
+    --track: #e3e8ec;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Noto Sans KR", sans-serif;
+    color: var(--ink);
+    background: linear-gradient(180deg, var(--sky) 0%, #f4fafc 55%, var(--sand) 100%);
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px 56px;
+  }
+  main { width: 100%; max-width: 520px; text-align: center; }
+  h1 {
+    font-family: "Jua", "Noto Sans KR", sans-serif;
+    font-size: clamp(2rem, 7vw, 2.6rem);
+    margin: 0 0 8px;
+    letter-spacing: 0.5px;
+  }
+  .sub { margin: 0 0 24px; line-height: 1.6; color: #44606f; }
+  .zones {
+    display: flex; justify-content: center; gap: 8px; margin-bottom: 24px; flex-wrap: wrap;
+  }
+  .zones span {
+    padding: 4px 12px; border-radius: 999px; font-size: 0.85rem; font-weight: 700; color: #fff;
+  }
+  .z-trop { background: var(--sun); }
+  .z-temp { background: var(--leaf); }
+  .z-cold { background: var(--ice); }
 
-    .layout{display:grid;grid-template-columns:1fr;gap:16px;padding:16px;box-sizing:border-box;max-width:1100px;margin:18px auto}
-    .card{background:var(--card-bg);border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(3,30,12,0.06)}
+  .upload-btn {
+    display: inline-block; cursor: pointer;
+    background: var(--ink); color: #fff;
+    font-family: inherit; font-size: 1.05rem; font-weight: 700;
+    padding: 14px 28px; border: 0; border-radius: 14px;
+  }
+  .upload-btn:hover { background: #2b5068; }
+  .upload-btn:focus-visible { outline: 3px solid var(--sun); outline-offset: 3px; }
+  #file { display: none; }
 
-    #drop-area{border:2px dashed rgba(11,138,62,0.18);border-radius:10px;padding:18px;display:flex;align-items:center;justify-content:center;min-height:320px;background:linear-gradient(180deg,#fff,#fbfffb)}
-    #drop-area.dragover{border-color:var(--accent);box-shadow:0 8px 22px rgba(11,138,62,0.06)}
-    #preview{display:flex;align-items:center;justify-content:center;width:100%;height:100%}
-    #preview img{max-width:100%;max-height:520px;border-radius:8px;object-fit:contain;display:block}
-
-    .controls{display:flex;gap:8px;align-items:center;margin-top:12px}
-    .controls label, .controls button{background:white;border:1px solid #ddd;padding:8px 12px;border-radius:8px;cursor:pointer}
-
-    .meta{font-size:13px;color:var(--muted);margin-top:10px}
-
-    @media(max-width:900px){
-      #drop-area{min-height:220px}
-      #preview img{max-height:360px}
-    }
-  </style>
+  #status { margin: 20px 0 8px; font-weight: 700; font-size: 1.05rem; }
+  #preview {
+    display: none; width: 100%; max-width: 380px; max-height: 300px; object-fit: cover;
+    margin: 12px auto 8px; border-radius: 16px; box-shadow: 0 6px 20px rgba(31,58,77,.25);
+  }
+  #result { display: none; text-align: left; max-width: 440px; margin: 16px auto 0; }
+  #verdict {
+    text-align: center; font-family: "Jua", sans-serif; font-size: 1.5rem; margin-bottom: 14px;
+  }
+  .row { margin-bottom: 14px; }
+  .label { font-weight: 700; margin-bottom: 4px; }
+  .track { background: var(--track); border-radius: 999px; height: 30px; overflow: hidden; }
+  .fill {
+    height: 100%; min-width: 44px; width: 0; border-radius: 999px;
+    color: #fff; font-weight: 700; font-size: 0.9rem;
+    display: flex; align-items: center; justify-content: flex-end; padding: 0 10px;
+    transition: width .5s ease;
+  }
+  .row.top .label::after { content: " ⭐"; }
+  @media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
+</style>
 </head>
 <body>
-  <div class="top-box">
-    <h1>사진 업로드 데모</h1>
+<main>
+  <h1>🧭 AI 기후 탐험대</h1>
+  <p class="sub">풍경 사진을 올리면 AI가<br>열대·온대·한대 중 어떤 기후인지 판단해 줘요.</p>
+  <div class="zones">
+    <span class="z-trop">열대기후</span>
+    <span class="z-temp">온대기후</span>
+    <span class="z-cold">한대기후</span>
   </div>
 
-  <div class="layout">
-    <div class="card">
-      <div id="drop-area">
-        <div id="preview" class="placeholder">
-          <div style="text-align:center">
-            <div style="font-weight:700;color:#196f3a">여기에 사진을 끌어다 놓으세요</div>
-            <div style="color:var(--muted);margin-top:6px">또는 아래의 찾아보기를 사용하세요</div>
-          </div>
-        </div>
-      </div>
+  <label class="upload-btn" for="file" tabindex="0">📷 사진 업로드하기</label>
+  <input type="file" id="file" accept="image/*">
 
-      <div class="controls">
-        <input type="file" id="file-input" accept="image/*" style="display:none">
-        <label for="file-input" id="browse" style="display:inline-block; cursor:pointer; user-select:none;">찾아보기</label>
-        <div id="filename" style="color:var(--muted)"></div>
-      </div>
+  <div id="status">⏳ 모델을 불러오는 중이에요...</div>
+  <img id="preview" alt="업로드한 사진">
 
-      <div class="meta">업로드된 사진은 로컬에서 미리보기만 됩니다. (모델/웹캠 제거된 모드)</div>
-    </div>
+  <div id="result">
+    <div id="verdict"></div>
+    <div id="bars"></div>
   </div>
+</main>
 
-  <script src="./main.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+<script>
+  // 모델 파일 경로 (저장소 맨 위 models/my-model 폴더)
+  const BASE = "./models/my-model/";
+  const COLORS = { "열대기후": "#f2a33a", "온대기후": "#2e9e6b", "한대기후": "#5aa9e6" };
+
+  const statusEl = document.getElementById("status");
+  const preview = document.getElementById("preview");
+  const result = document.getElementById("result");
+  const bars = document.getElementById("bars");
+  const verdict = document.getElementById("verdict");
+  const fileInput = document.getElementById("file");
+  let model = null;
+
+  async function init() {
+    try {
+      model = await tmImage.load(BASE + "model.json", BASE + "metadata.json");
+      statusEl.textContent = "✨ 로딩 완료! 사진을 업로드해보세요.";
+    } catch (e) {
+      console.error(e);
+      statusEl.textContent = "⚠️ 모델을 불러오지 못했어요. 새로고침 해 보세요.";
+    }
+  }
+  init();
+
+  document.querySelector(".upload-btn").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); }
+  });
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    if (!model) { statusEl.textContent = "⏳ 모델을 아직 불러오는 중이에요. 잠시 후 다시 해보세요."; return; }
+    statusEl.textContent = "🔍 분석 중...";
+    result.style.display = "none";
+    preview.onload = predict;
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = "block";
+  });
+
+  async function predict() {
+    const preds = await model.predict(preview);
+    const best = preds.reduce((a, b) => (b.probability > a.probability ? b : a));
+    bars.innerHTML = "";
+    preds.forEach((p) => {
+      const pct = (p.probability * 100).toFixed(1);
+      const row = document.createElement("div");
+      row.className = "row" + (p === best ? " top" : "");
+      row.innerHTML =
+        '<div class="label">' + p.className + '</div>' +
+        '<div class="track"><div class="fill" style="background:' +
+        (COLORS[p.className] || "#888") + '">' + pct + '%</div></div>';
+      bars.appendChild(row);
+      requestAnimationFrame(() => {
+        row.querySelector(".fill").style.width = Math.max(p.probability * 100, 0) + "%";
+      });
+    });
+    verdict.textContent = "이 사진은 「" + best.className + "」 같아요!";
+    statusEl.textContent = "";
+    result.style.display = "block";
+  }
+</script>
 </body>
 </html>
