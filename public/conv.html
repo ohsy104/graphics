@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3×3 필터 체험기</title>
+<!-- 그래픽스개론 10주차. 사진을 흑백 숫자 배열로 바꾼 뒤 3×3 필터를 직접 적용해 보는 도구. 외부 라이브러리 없음. -->
+<style>
+  body { font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; margin: 0; background: #f6f7f9; color: #1e1e1e; }
+  header { background: #073e7b; color: #fff; padding: 14px 22px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity: .9; }
+  main { max-width: 1100px; margin: 18px auto; padding: 0 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  section { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 14px 16px; }
+  section h2 { font-size: 15px; margin: 0 0 10px; color: #073e7b; }
+  canvas { max-width: 100%; border: 1px solid #ced4da; background: #fff; }
+  button { font-size: 13.5px; padding: 6px 12px; border: 0; border-radius: 6px; background: #1971c2; color: #fff; cursor: pointer; margin: 3px 4px 3px 0; }
+  button.preset { background: #e7f5ff; color: #073e7b; border: 1px solid #a5d8ff; }
+  table.k { border-collapse: collapse; margin: 8px 0; }
+  table.k td { border: 1px solid #ced4da; padding: 2px; }
+  table.k input { width: 54px; font-size: 15px; text-align: center; padding: 4px 2px; border: 0; }
+  .note { font-size: 12.5px; color: #495057; line-height: 1.5; margin-top: 6px; }
+  .calc { font-family: Consolas, monospace; font-size: 12.5px; background: #f4f5f7; border: 1px solid #c9ced6; padding: 8px; margin-top: 8px; white-space: pre-wrap; min-height: 60px; }
+  .wide { grid-column: 1 / span 2; }
+  label { font-size: 13px; margin-right: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>3×3 필터 체험기</h1>
+  <p>사진을 흑백 숫자(0~255)로 바꾼 뒤 3×3 필터를 곱해서 더합니다. 출력 그림을 누르면 그 칸의 계산을 보여 줍니다.</p>
+</header>
+<main>
+  <section>
+    <h2>1. 입력 (흑백)</h2>
+    <input type="file" id="file" accept="image/*">
+    <div><canvas id="src" width="320" height="320"></canvas></div>
+    <div class="note">사진은 가운데 정사각형으로 자른 뒤 160×160 숫자 배열로 줄여서 씁니다. 티처블 머신이 사진을 정사각형으로 맞추는 것과 같은 방식입니다.</div>
+  </section>
+  <section>
+    <h2>2. 필터와 출력</h2>
+    <div>
+      <button class="preset" data-k="0,0,0,0,1,0,0,0,0">그대로</button>
+      <button class="preset" data-k="1,1,1,1,1,1,1,1,1" data-div="9">흐림</button>
+      <button class="preset" data-k="0,-1,0,-1,5,-1,0,-1,0">선명하게</button>
+      <button class="preset" data-k="-1,0,1,-2,0,2,-1,0,1" data-abs="1">세로 경계</button>
+      <button class="preset" data-k="-1,-2,-1,0,0,0,1,2,1" data-abs="1">가로 경계</button>
+      <button class="preset" data-k="-1,-1,-1,-1,8,-1,-1,-1,-1" data-abs="1">모든 경계</button>
+    </div>
+    <table class="k"><tbody id="kt"></tbody></table>
+    <label><input type="checkbox" id="abs"> 절댓값으로 보기</label>
+    <label>나누기 <input type="number" id="div" value="1" step="1" style="width:50px"></label>
+    <button id="apply">적용</button>
+    <div><canvas id="dst" width="320" height="320"></canvas></div>
+  </section>
+  <section class="wide">
+    <h2>3. 한 칸 계산 (출력 그림을 누르세요)</h2>
+    <div class="calc" id="calc">출력 그림의 한 점을 누르면, 그 자리 입력 3×3 숫자와 필터를 곱해서 더하는 과정을 보여 줍니다.</div>
+    <div class="note">필터 값이 모두 양수이고 합이 1이면 주변 평균(흐림), 가운데가 크고 주변이 음수면 차이를 키움(선명), 왼쪽은 음수 오른쪽은 양수면 왼쪽과 오른쪽의 밝기 차이(세로 경계)가 나옵니다. 합성곱 신경망의 첫 층이 이런 필터 수십 개를 데이터에서 스스로 정합니다.</div>
+  </section>
+</main>
+<script>
+const N = 160;
+const $ = (id) => document.getElementById(id);
+let gray = null, out = null, kernel = [0,0,0,0,1,0,0,0,0];
+
+// 필터 입력칸
+const kt = $("kt");
+for (let i = 0; i < 3; i++) {
+  const tr = document.createElement("tr");
+  for (let j = 0; j < 3; j++) {
+    const td = document.createElement("td"); const inp = document.createElement("input");
+    inp.type = "number"; inp.step = "1"; inp.value = kernel[i * 3 + j]; inp.id = "k" + (i * 3 + j);
+    td.appendChild(inp); tr.appendChild(td);
+  }
+  kt.appendChild(tr);
+}
+function readKernel() { kernel = []; for (let i = 0; i < 9; i++) kernel.push(parseFloat($("k" + i).value) || 0); }
+document.querySelectorAll(".preset").forEach(b => b.addEventListener("click", () => {
+  const k = b.dataset.k.split(",").map(Number);
+  k.forEach((v, i) => $("k" + i).value = v);
+  $("div").value = b.dataset.div || 1; $("abs").checked = !!b.dataset.abs;
+  apply();
+}));
+
+// 기본 그림 (사진을 고르기 전): 밝은 배경 위의 어두운 사각형과 원
+function defaultImage() {
+  const c = document.createElement("canvas"); c.width = N; c.height = N; const ctx = c.getContext("2d");
+  ctx.fillStyle = "#dcdcdc"; ctx.fillRect(0, 0, N, N);
+  ctx.fillStyle = "#505050"; ctx.fillRect(30, 40, 50, 80);
+  ctx.fillStyle = "#909090"; ctx.beginPath(); ctx.arc(115, 95, 28, 0, Math.PI * 2); ctx.fill();
+  return c;
+}
+function setSource(c) {
+  const d = c.getContext("2d").getImageData(0, 0, N, N).data;
+  gray = new Float32Array(N * N);
+  for (let i = 0; i < N * N; i++) gray[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  paint($("src"), gray);
+  apply();
+}
+function paint(canvas, arr) {
+  const ctx = canvas.getContext("2d");
+  const tmp = document.createElement("canvas"); tmp.width = N; tmp.height = N;
+  const id = tmp.getContext("2d").createImageData(N, N);
+  for (let i = 0; i < N * N; i++) { const v = Math.max(0, Math.min(255, arr[i])); id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v; id.data[i * 4 + 3] = 255; }
+  tmp.getContext("2d").putImageData(id, 0, 0);
+  ctx.imageSmoothingEnabled = false; ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(tmp, 0, 0, canvas.width, canvas.height);
+}
+function at(x, y) { x = Math.max(0, Math.min(N - 1, x)); y = Math.max(0, Math.min(N - 1, y)); return gray[y * N + x]; }
+function apply() {
+  if (!gray) return;
+  readKernel();
+  const div = parseFloat($("div").value) || 1, useAbs = $("abs").checked;
+  out = new Float32Array(N * N);
+  let mx = 1;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let s = 0;
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) s += kernel[(i + 1) * 3 + (j + 1)] * at(x + j, y + i);
+    s /= div; if (useAbs) s = Math.abs(s);
+    out[y * N + x] = s; if (useAbs && s > mx) mx = s;
+  }
+  const shown = useAbs ? out.map(v => v / mx * 255) : out;
+  paint($("dst"), shown);
+}
+$("apply").addEventListener("click", apply);
+$("abs").addEventListener("change", apply);
+$("file").addEventListener("change", (ev) => {
+  const f = ev.target.files[0]; if (!f) return;
+  const im = new Image();
+  im.onload = () => {
+    URL.revokeObjectURL(im.src);
+    const c = document.createElement("canvas"); c.width = N; c.height = N;
+    const s = Math.min(im.width, im.height);
+    c.getContext("2d").drawImage(im, (im.width - s) / 2, (im.height - s) / 2, s, s, 0, 0, N, N);
+    setSource(c);
+  };
+  im.src = URL.createObjectURL(f);
+});
+$("dst").addEventListener("click", (ev) => {
+  if (!gray) return;
+  const r = $("dst").getBoundingClientRect();
+  const x = Math.floor((ev.clientX - r.left) / r.width * N), y = Math.floor((ev.clientY - r.top) / r.height * N);
+  readKernel();
+  const div = parseFloat($("div").value) || 1;
+  let rows = [], terms = [], s = 0;
+  for (let i = -1; i <= 1; i++) {
+    let row = [];
+    for (let j = -1; j <= 1; j++) {
+      const v = Math.round(at(x + j, y + i)), k = kernel[(i + 1) * 3 + (j + 1)];
+      row.push(String(v).padStart(3)); terms.push("(" + k + "×" + v + ")"); s += k * v;
+    }
+    rows.push(row.join(" "));
+  }
+  const res = s / div;
+  $("calc").textContent =
+    "누른 자리 (x=" + x + ", y=" + y + ")\n입력 3×3 밝기\n" + rows.join("\n") +
+    "\n\n필터\n" + [0, 1, 2].map(i => kernel.slice(i * 3, i * 3 + 3).map(v => String(v).padStart(3)).join(" ")).join("\n") +
+    "\n\n" + terms.join(" + ") + (div !== 1 ? "  ÷ " + div : "") + " = " + res.toFixed(1) +
+    ($("abs").checked ? "  → 절댓값 " + Math.abs(res).toFixed(1) : "");
+});
+setSource(defaultImage());
+</script>
+</body>
+</html>
