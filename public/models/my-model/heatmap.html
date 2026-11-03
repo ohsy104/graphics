@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>가리기 실험기</title>
+<!-- 그래픽스개론 10주차. 티처블 머신 이미지 모델용 가리기(occlusion) 실험 도구.
+     같은 폴더의 model.json, metadata.json, weights.bin 을 읽습니다. 사진은 브라우저 밖으로 나가지 않습니다. -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+<style>
+  body { font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; margin: 0; background: #f6f7f9; color: #1e1e1e; }
+  header { background: #073e7b; color: #fff; padding: 14px 22px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity: .9; }
+  main { max-width: 1100px; margin: 18px auto; padding: 0 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  section { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 14px 16px; }
+  section h2 { font-size: 15px; margin: 0 0 10px; color: #073e7b; }
+  label { font-size: 13px; display: block; margin: 6px 0 2px; }
+  select, input[type=number] { font-size: 14px; padding: 4px 6px; }
+  button { font-size: 14px; padding: 7px 14px; border: 0; border-radius: 6px; background: #1971c2; color: #fff; cursor: pointer; margin: 4px 6px 4px 0; }
+  button.gray { background: #868e96; }
+  button:disabled { background: #adb5bd; cursor: default; }
+  #status { font-size: 13px; color: #495057; margin-top: 6px; min-height: 18px; }
+  canvas { max-width: 100%; border: 1px solid #ced4da; background: #fff; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  table { border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+  td, th { border: 1px solid #dee2e6; padding: 4px 8px; text-align: center; }
+  th { background: #e7f5ff; }
+  .note { font-size: 12.5px; color: #495057; margin-top: 8px; line-height: 1.5; }
+  .big { font-size: 22px; font-weight: bold; color: #073e7b; }
+  .wide { grid-column: 1 / span 2; }
+</style>
+</head>
+<body>
+<header>
+  <h1>가리기 실험기</h1>
+  <p>사진의 한 칸씩 회색으로 가리면서 고른 클래스의 확률이 얼마나 떨어지는지 봅니다. 많이 떨어지는 칸이 모델이 그 판정의 근거로 삼는 곳입니다.</p>
+</header>
+<main>
+  <section>
+    <h2>1. 모델과 사진</h2>
+    <div id="status">모델을 불러오는 중입니다...</div>
+    <label>사진 고르기 (한 장)</label>
+    <input type="file" id="file" accept="image/*" disabled>
+    <div class="row">
+      <div><label>볼 클래스 (예측 클래스로 맞춰짐)</label><select id="cls"></select></div>
+      <div><label>격자</label><select id="grid"><option>4</option><option selected>6</option><option>8</option></select></div>
+      <div><label>가림 칸 크기(격자 칸의 배수)</label><select id="patch"><option selected>1</option><option>2</option></select></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button id="run" disabled>실행</button>
+      <button id="csv" class="gray" disabled>CSV 내려받기</button>
+      <button id="png" class="gray" disabled>히트맵 그림 저장</button>
+    </div>
+    <div class="note">원본 확률 <span id="basep" class="big">-</span> <span id="basecls"></span></div>
+    <div class="note">틀린 사진은 모델이 예측한 클래스 그대로 두고 실행하세요. 모델이 무엇을 보고 그렇게 판정했는지가 나옵니다. 정답 클래스로 바꾸면 정답의 근거를 어디서 보고 있는지가 나오는데, 정답 확률이 원래 낮으면 떨어질 것이 없어 히트맵이 비어 보입니다.</div>
+    <div class="note">가림 색은 회색(128)입니다. 격자 6이면 36번 예측하므로 수십 초 걸릴 수 있습니다. 사진은 이 브라우저 안에서만 처리됩니다.</div>
+  </section>
+  <section>
+    <h2>2. 히트맵 (칸마다 확률이 떨어진 양)</h2>
+    <canvas id="heat" width="480" height="360"></canvas>
+    <div class="note">색이 진할수록 그 칸을 가렸을 때 고른 클래스의 확률이 많이 떨어진 것입니다. 숫자는 원본 확률에서 뺀 값입니다. 음수(가렸더니 올라감)는 0으로 표시합니다.</div>
+  </section>
+  <section class="wide">
+    <h2>3. 읽기</h2>
+    <div id="summary" class="note">실행하면 가장 많이 떨어진 칸 3개와 전체 판정을 요약합니다.</div>
+    <table id="tbl"></table>
+  </section>
+</main>
+<canvas id="work" style="display:none"></canvas>
+<script>
+// ---- 설정 ----
+const MODEL_URL = "./";              // 같은 폴더의 model.json, metadata.json, weights.bin
+const GRAY = 128;                    // 가림 색
+let model = null, labels = [], img = null, baseProbs = null, lastResult = null;
+
+const $ = (id) => document.getElementById(id);
+const status = (t) => { $("status").textContent = t; };
+
+// ---- 모델 불러오기 ----
+async function loadModel() {
+  try {
+    model = await tmImage.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
+    labels = model.getClassLabels();
+    const sel = $("cls"); sel.innerHTML = "";
+    labels.forEach((l, i) => { const o = document.createElement("option"); o.value = i; o.textContent = l; sel.appendChild(o); });
+    $("file").disabled = false;
+    status("모델을 불러왔습니다. 클래스 " + labels.length + "개 (" + labels.join(", ") + ")");
+  } catch (e) {
+    status("모델을 불러오지 못했습니다. model.json, metadata.json, weights.bin 이 이 파일과 같은 폴더에 있는지 확인하세요. " + e);
+  }
+}
+
+// ---- 사진 읽기 ----
+$("file").addEventListener("change", async (ev) => {
+  const f = ev.target.files[0]; if (!f) return;
+  img = new Image();
+  img.onload = async () => {
+    URL.revokeObjectURL(img.src);
+    drawBase();
+    baseProbs = await predictCanvas(makeCanvas(null));
+    const top = argmax(baseProbs);
+    $("cls").value = top;                       // 모델이 예측한 클래스를 기본으로 고름
+    $("basep").textContent = baseProbs[top].toFixed(2);
+    $("basecls").textContent = "(모델 판정 " + labels[top] + " " + baseProbs[top].toFixed(2) + ")";
+    $("run").disabled = false;
+    status("사진을 읽었습니다. 볼 클래스를 확인하고 실행을 누르세요. 틀린 사진이면 예측된 클래스 그대로 두세요.");
+  };
+  img.src = URL.createObjectURL(f);
+});
+$("cls").addEventListener("change", () => { if (baseProbs) $("basep").textContent = baseProbs[$("cls").value].toFixed(2); });
+
+function argmax(a) { let m = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[m]) m = i; return m; }
+
+// 사진을 정사각형(224) 캔버스에 가운데 맞춰 그리고, rect가 있으면 그 자리를 회색으로 가림
+function makeCanvas(rect) {
+  const c = $("work"); c.width = 224; c.height = 224;
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, 224, 224);
+  const s = Math.min(img.width, img.height);                 // 티처블 머신처럼 가운데 정사각형으로 자름
+  const sx = (img.width - s) / 2, sy = (img.height - s) / 2;
+  ctx.drawImage(img, sx, sy, s, s, 0, 0, 224, 224);
+  if (rect) { ctx.fillStyle = "rgb(" + GRAY + "," + GRAY + "," + GRAY + ")"; ctx.fillRect(rect.x, rect.y, rect.w, rect.h); }
+  return c;
+}
+async function predictCanvas(c) {
+  const out = await model.predict(c);
+  const probs = new Array(labels.length).fill(0);
+  out.forEach((o) => { const i = labels.indexOf(o.className); if (i >= 0) probs[i] = o.probability; });
+  return probs;
+}
+
+// ---- 히트맵 캔버스 ----
+function drawBase() {
+  const h = $("heat"); const ctx = h.getContext("2d");
+  ctx.clearRect(0, 0, h.width, h.height);
+  const s = Math.min(img.width, img.height);
+  const sx = (img.width - s) / 2, sy = (img.height - s) / 2;
+  h.width = 480; h.height = 480;
+  ctx.drawImage(img, sx, sy, s, s, 0, 0, 480, 480);
+}
+function drawHeat(drops, n) {
+  drawBase();
+  const h = $("heat"); const ctx = h.getContext("2d");
+  const cell = 480 / n; const vmax = 0.5;
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const d = Math.max(0, drops[i][j]);
+    const a = Math.min(0.75, d / vmax * 0.75);
+    ctx.fillStyle = "rgba(220, 38, 38," + a.toFixed(3) + ")";
+    ctx.fillRect(j * cell, i * cell, cell, cell);
+    ctx.strokeStyle = "rgba(255,255,255,0.6)"; ctx.strokeRect(j * cell, i * cell, cell, cell);
+    ctx.fillStyle = "#1e1e1e"; ctx.font = "bold " + Math.max(11, cell / 5) + "px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(d.toFixed(2), j * cell + cell / 2, i * cell + cell / 2);
+  }
+}
+
+// ---- 실행 ----
+$("run").addEventListener("click", async () => {
+  if (!img || !model) return;
+  const n = parseInt($("grid").value), k = parseInt($("patch").value), ci = parseInt($("cls").value);
+  const cell = 224 / n;
+  const drops = Array.from({ length: n }, () => new Array(n).fill(0));
+  const probs = Array.from({ length: n }, () => new Array(n).fill(0));
+  $("run").disabled = true;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      status("가리는 중 " + (i * n + j + 1) + " / " + (n * n));
+      const rect = { x: Math.round(j * cell), y: Math.round(i * cell), w: Math.round(cell * k), h: Math.round(cell * k) };
+      const p = await predictCanvas(makeCanvas(rect));
+      probs[i][j] = p[ci];
+      drops[i][j] = baseProbs[ci] - p[ci];
+      await new Promise(r => setTimeout(r, 0));
+    }
+  }
+  drawHeat(drops, n);
+  lastResult = { n, k, ci, probs, drops };
+  summarize(lastResult);
+  $("run").disabled = false; $("csv").disabled = false; $("png").disabled = false;
+  status("끝났습니다. 히트맵과 아래 요약을 보고 분석표에 적으세요.");
+});
+
+function summarize(r) {
+  const { n, drops, probs, ci } = r;
+  const flat = [];
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) flat.push({ i, j, d: drops[i][j], p: probs[i][j] });
+  flat.sort((a, b) => b.d - a.d);
+  const top = flat.slice(0, 3);
+  const maxd = top[0].d, meand = flat.reduce((s, x) => s + Math.max(0, x.d), 0) / flat.length;
+  let shape;
+  if (maxd < 0.1) shape = "어디를 가려도 확률이 거의 안 떨어집니다. 모델이 한 부분이 아니라 사진 전체의 색이나 밝기로 판정하고 있을 수 있습니다.";
+  else if (meand > maxd * 0.5) shape = "여러 칸에서 고르게 떨어집니다. 넓은 영역을 함께 보고 있습니다.";
+  else shape = "특정 칸에서만 크게 떨어집니다. 그 칸에 무엇이 있는지(물체인지 배경인지) 확인하세요.";
+  const rc = (x) => "(" + (x.i + 1) + "행 " + (x.j + 1) + "열)";
+  $("summary").innerHTML =
+    "본 클래스 <b>" + labels[ci] + "</b>, 원본 확률 <b>" + baseProbs[ci].toFixed(2) + "</b>. " +
+    "가장 많이 떨어진 칸 " + top.map(x => rc(x) + " " + x.d.toFixed(2)).join(", ") + ". " + shape;
+  let html = "<tr><th>행 \\ 열</th>" + Array.from({ length: n }, (_, j) => "<th>" + (j + 1) + "</th>").join("") + "</tr>";
+  for (let i = 0; i < n; i++) {
+    html += "<tr><th>" + (i + 1) + "</th>" + Array.from({ length: n }, (_, j) => "<td>" + probs[i][j].toFixed(2) + "</td>").join("") + "</tr>";
+  }
+  $("tbl").innerHTML = html;
+}
+
+// ---- 내려받기 ----
+$("csv").addEventListener("click", () => {
+  const { n, probs, drops, ci } = lastResult;
+  let s = "﻿본클래스," + labels[ci] + "\n원본확률," + baseProbs[ci].toFixed(4) + "\n행,열,가렸을때확률,떨어진양(음수는 올라감)\n";
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) s += (i + 1) + "," + (j + 1) + "," + probs[i][j].toFixed(4) + "," + drops[i][j].toFixed(4) + "\n";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([s], { type: "text/csv" })); a.download = "occlusion_" + labels[ci] + ".csv"; a.click();
+});
+$("png").addEventListener("click", () => {
+  const a = document.createElement("a"); a.href = $("heat").toDataURL("image/png"); a.download = "heatmap_" + labels[lastResult.ci] + ".png"; a.click();
+});
+
+loadModel();
+</script>
+</body>
+</html>
