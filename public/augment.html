@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>증강 사진 만들기</title>
+<!-- 그래픽스개론 10주차. 학습 업로드용 사진을 회전, 좌우 반전, 밝기 조정으로 늘리는 도구.
+     모든 처리는 브라우저 안에서 canvas로 하며 사진은 외부로 나가지 않습니다. 묶음 내려받기에만 JSZip(cdnjs)을 씁니다. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  body { font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; margin: 0; background: #f6f7f9; color: #1e1e1e; }
+  header { background: #073e7b; color: #fff; padding: 14px 22px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity: .9; }
+  main { max-width: 1100px; margin: 18px auto; padding: 0 16px; }
+  section { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; }
+  section h2 { font-size: 15px; margin: 0 0 10px; color: #073e7b; }
+  label { font-size: 13.5px; margin-right: 14px; }
+  input[type=number] { width: 60px; font-size: 14px; padding: 3px 5px; }
+  button { font-size: 14px; padding: 7px 14px; border: 0; border-radius: 6px; background: #1971c2; color: #fff; cursor: pointer; margin: 4px 6px 4px 0; }
+  button.gray { background: #868e96; }
+  button:disabled { background: #adb5bd; cursor: default; }
+  #status { font-size: 13px; color: #495057; margin-top: 6px; }
+  .warn { background: #fff9db; border: 1px solid #f08c00; border-radius: 6px; padding: 8px 10px; font-size: 13px; margin-top: 8px; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .card { border: 1px solid #dee2e6; border-radius: 6px; padding: 6px; font-size: 11.5px; text-align: center; background: #fafafa; word-break: break-all; }
+  .card canvas { width: 100%; height: auto; border: 1px solid #e9ecef; background: #fff; }
+  .note { font-size: 12.5px; color: #495057; line-height: 1.5; }
+</style>
+</head>
+<body>
+<header>
+  <h1>증강 사진 만들기</h1>
+  <p>학습 업로드용 사진을 돌리고, 뒤집고, 밝기를 바꿔 장수를 늘립니다. 고정 개발용 사진에는 쓰지 않습니다.</p>
+</header>
+<main>
+  <section>
+    <h2>1. 사진 고르기</h2>
+    <input type="file" id="files" accept="image/*" multiple>
+    <div class="note">파일 이름은 그대로 두고 뒤에 _rot12, _flip, _b70 같은 꼬리표만 붙입니다. 클래스_번호.jpg 규칙을 쓰고 있으면 밑줄 앞의 클래스 이름은 그대로 남습니다.</div>
+  </section>
+  <section>
+    <h2>2. 어떻게 바꿀까</h2>
+    <div>
+      <label><input type="checkbox" id="rot" checked> 회전 ±<input type="number" id="deg" value="12" min="1" max="45">° (2장)</label>
+      <label><input type="checkbox" id="flip"> 좌우 반전 (1장)</label>
+      <label><input type="checkbox" id="bri" checked> 밝기 ×<input type="number" id="b1" value="0.7" step="0.05" min="0.3" max="1"> 과 ×<input type="number" id="b2" value="1.3" step="0.05" min="1" max="2"> (2장)</label>
+    </div>
+    <div class="warn">좌우 반전은 뒤집어도 뜻이 같은 물건에만 쓰세요. 숫자나 글자, 방향이 있는 도형, 왼쪽과 오른쪽을 구분하는 자세는 뒤집으면 다른 클래스가 됩니다.</div>
+    <div style="margin-top:8px">
+      <button id="make">만들기</button>
+      <button id="zip" class="gray" disabled>묶음(zip) 내려받기</button>
+      <button id="clear" class="gray">지우기</button>
+    </div>
+    <div id="status"></div>
+  </section>
+  <section>
+    <h2>3. 결과</h2>
+    <div id="grid"></div>
+    <div class="note" style="margin-top:8px">기록표 '바꾼 것' 칸에는 이렇게 적습니다. 예) 증강 회전 ±12°, 밝기 ×0.7과 ×1.3, 원본 60장 → 300장. 증강본은 원본과 같은 묶음(학습 업로드용)에만 넣습니다.</div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let results = [];   // {name, blob}
+
+function loadImage(file) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => { URL.revokeObjectURL(im.src); res(im); };
+    im.onerror = rej;
+    im.src = URL.createObjectURL(file);
+  });
+}
+function transform(img, op) {
+  const c = document.createElement("canvas");
+  c.width = img.width; c.height = img.height;
+  const ctx = c.getContext("2d");
+  if (op.type === "rot") {
+    // 빈 구석은 사진의 평균색과 비슷한 회색으로 채움
+    ctx.fillStyle = "#e9e9e9"; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.translate(c.width / 2, c.height / 2);
+    ctx.rotate(op.deg * Math.PI / 180);
+    ctx.drawImage(img, -img.width / 2, -img.height / 2);
+  } else if (op.type === "flip") {
+    ctx.translate(c.width, 0); ctx.scale(-1, 1);
+    ctx.drawImage(img, 0, 0);
+  } else if (op.type === "bri") {
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, c.width, c.height);
+    const a = d.data;
+    for (let i = 0; i < a.length; i += 4) {       // 픽셀마다 R, G, B에 같은 배율을 곱함
+      a[i] = Math.min(255, a[i] * op.k);
+      a[i + 1] = Math.min(255, a[i + 1] * op.k);
+      a[i + 2] = Math.min(255, a[i + 2] * op.k);
+    }
+    ctx.putImageData(d, 0, 0);
+  }
+  return c;
+}
+function toBlob(c) { return new Promise(res => c.toBlob(res, "image/jpeg", 0.92)); }
+function tagName(name, tag) {
+  const i = name.lastIndexOf(".");
+  const base = i > 0 ? name.slice(0, i) : name;
+  return base + "_" + tag + ".jpg";
+}
+
+$("make").addEventListener("click", async () => {
+  const files = Array.from($("files").files);
+  if (!files.length) { $("status").textContent = "사진을 먼저 고르세요."; return; }
+  const ops = [];
+  if ($("rot").checked) { const d = parseFloat($("deg").value); ops.push({ type: "rot", deg: d, tag: "rot" + d }, { type: "rot", deg: -d, tag: "rotm" + d }); }
+  if ($("flip").checked) ops.push({ type: "flip", tag: "flip" });
+  if ($("bri").checked) { ops.push({ type: "bri", k: parseFloat($("b1").value), tag: "b" + Math.round(parseFloat($("b1").value) * 100) }, { type: "bri", k: parseFloat($("b2").value), tag: "b" + Math.round(parseFloat($("b2").value) * 100) }); }
+  if (!ops.length) { $("status").textContent = "바꿀 방법을 하나 이상 고르세요."; return; }
+  results = []; $("grid").innerHTML = ""; $("make").disabled = true;
+  let n = 0;
+  for (const f of files) {
+    const img = await loadImage(f);
+    for (const op of ops) {
+      const c = transform(img, op);
+      const blob = await toBlob(c);
+      const name = tagName(f.name, op.tag);
+      results.push({ name, blob });
+      if (results.length <= 60) {                 // 미리보기는 60장까지
+        const card = document.createElement("div"); card.className = "card";
+        const pv = document.createElement("canvas"); pv.width = 150; pv.height = Math.round(150 * c.height / c.width);
+        pv.getContext("2d").drawImage(c, 0, 0, pv.width, pv.height);
+        card.appendChild(pv); card.appendChild(document.createTextNode(name));
+        $("grid").appendChild(card);
+      }
+      n++;
+      $("status").textContent = "만드는 중 " + n + " / " + files.length * ops.length;
+      await new Promise(r => setTimeout(r, 0));
+    }
+  }
+  $("status").textContent = "원본 " + files.length + "장 → 증강 " + results.length + "장. 학습 업로드용은 원본과 합쳐 " + (files.length + results.length) + "장이 됩니다.";
+  $("make").disabled = false; $("zip").disabled = false;
+});
+
+$("zip").addEventListener("click", async () => {
+  if (typeof JSZip === "undefined") { $("status").textContent = "zip 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요."; return; }
+  const z = new JSZip();
+  results.forEach(r => z.file(r.name, r.blob));
+  $("status").textContent = "zip 만드는 중...";
+  const blob = await z.generateAsync({ type: "blob" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "augmented.zip"; a.click();
+  $("status").textContent = "augmented.zip 을 내려받았습니다. 압축을 풀어 티처블 머신의 해당 클래스에 올리세요.";
+});
+$("clear").addEventListener("click", () => { results = []; $("grid").innerHTML = ""; $("zip").disabled = true; $("status").textContent = ""; $("files").value = ""; });
+</script>
+</body>
+</html>
