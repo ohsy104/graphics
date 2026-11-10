@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>11주차 실습실</title>
+<!-- 그래픽스개론 11주차 실습 안내. 같은 폴더의 threshold.html, student_v1.html, device_check.html 로 이어진다. 파일 이름을 index.html 로 바꾸지 말 것(자기 앱의 index.html 을 덮어쓰게 됨). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#EEF1F5; --card:#FFFFFF; --ink:#10233F; --navy:#0B3A75; --line:#D5DCE6; --mute:#5C6B80;
+          --ok:#0E8A7B; --bad:#D1345B; --unsure:#8A94A3; --bar:#F2B90F; --soft:#F6F8FB; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"IBM Plex Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif; font-size:15px; line-height:1.6; }
+  a { color:var(--navy); }
+  .top { background:var(--navy); color:#fff; padding:18px 24px 16px; }
+  .top .in { max-width:1180px; margin:0 auto; display:flex; gap:18px; align-items:baseline; flex-wrap:wrap; }
+  .top h1 { margin:0; font-size:22px; font-weight:700; letter-spacing:-0.01em; }
+  .top p { margin:0; font-size:13.5px; opacity:.88; flex:1 1 420px; }
+  .top a { color:#fff; font-size:13px; opacity:.85; }
+  main { max-width:1180px; margin:20px auto 48px; padding:0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px; }
+  h2 { font-size:16px; margin:0 0 10px; font-weight:700; color:var(--navy); }
+  h3 { font-size:14px; margin:14px 0 6px; font-weight:700; }
+  label { display:block; font-size:13px; margin:10px 0 4px; font-weight:600; }
+  .note { font-size:13px; color:var(--mute); margin:6px 0 0; }
+  .status { font-size:13.5px; padding:8px 10px; background:var(--soft); border-left:4px solid var(--navy); border-radius:4px; margin:8px 0; }
+  .warn { background:#FFF7DB; border:1px solid #E0A800; border-radius:6px; padding:8px 10px; font-size:13px; margin-top:8px; }
+  .warn:empty { display:none; }
+  [hidden] { display:none !important; }   /* display 를 따로 준 요소도 hidden 이면 확실히 감춤 */
+  button, .btn { font:inherit; font-size:14px; font-weight:600; padding:8px 14px; border-radius:7px; border:1px solid var(--navy); background:var(--navy); color:#fff; cursor:pointer; }
+  button.ghost { background:#fff; color:var(--navy); }
+  button:disabled { background:#B8C2D0; border-color:#B8C2D0; color:#fff; cursor:default; }
+  button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline:3px solid var(--bar); outline-offset:2px; }
+  input[type=file] { font-size:13.5px; max-width:100%; }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; font-variant-numeric:tabular-nums; }
+  th, td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:right; }
+  th { background:var(--soft); font-weight:600; text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
+
+  .hero { background:var(--navy); color:#fff; padding:34px 24px 0; }
+  .hero .in { max-width:1080px; margin:0 auto; }
+  .hero .kicker { font-size:14px; opacity:.85; margin:0 0 6px; }
+  .hero h1 { font-size:clamp(30px, 5vw, 50px); line-height:1.15; margin:0 0 10px; letter-spacing:-0.03em; font-weight:700; max-width:16em; }
+  .hero p.lead { font-size:16.5px; max-width:44em; margin:0 0 22px; opacity:.93; }
+  .demo { background:#fff; color:var(--ink); border-radius:14px 14px 0 0; padding:16px 18px 14px; }
+  #strip { width:100%; height:190px; display:block; touch-action:none; cursor:ew-resize; background:var(--soft); border-radius:8px; }
+  .live { font-size:clamp(17px, 2.4vw, 22px); font-weight:600; margin:12px 0 2px; line-height:1.45; font-variant-numeric:tabular-nums; }
+  .live .n-ok { color:var(--ok); } .live .n-bad { color:var(--bad); } .live .n-un { color:var(--unsure); }
+  main.hub { max-width:1080px; }
+  .flow { list-style:none; margin:28px 0 0; padding:0; counter-reset:f; }
+  .flow > li { counter-increment:f; display:grid; grid-template-columns:64px 1fr auto; gap:16px; align-items:start; padding:20px 0; border-top:1px solid var(--line); }
+  .flow > li::before { content:counter(f); font-size:44px; font-weight:700; line-height:1; color:var(--navy); font-variant-numeric:tabular-nums; }
+  .flow h2 { font-size:20px; margin:0 0 4px; color:var(--ink); }
+  .flow p { margin:0; max-width:46em; }
+  .flow .write { font-size:13.5px; color:var(--mute); margin-top:6px; }
+  .flow a.btn { text-decoration:none; white-space:nowrap; display:inline-block; }
+  @media (max-width: 700px) { .flow > li { grid-template-columns:44px 1fr; } .flow > li::before { font-size:32px; } .flow a.btn { grid-column:2; justify-self:start; } }
+  .two { display:grid; grid-template-columns:1.1fr 1fr; gap:28px; margin-top:26px; }
+  @media (max-width: 860px) { .two { grid-template-columns:1fr; } }
+  .two h2 { font-size:18px; color:var(--ink); }
+  details { border-top:1px solid var(--line); padding:10px 0; }
+  details:last-of-type { border-bottom:1px solid var(--line); }
+  summary { cursor:pointer; font-weight:600; }
+  details p { margin:8px 0 2px; font-size:14.5px; }
+  .refs { margin:0; padding-left:18px; font-size:14px; }
+  .refs li { margin-bottom:10px; }
+  .refs .why { display:block; color:var(--mute); font-size:13px; }
+  footer { max-width:1080px; margin:0 auto; padding:0 16px 40px; font-size:13px; color:var(--mute); }
+</style>
+</head>
+<body>
+<div class="hero"><div class="in">
+  <p class="kicker">그래픽스개론 11주차 실습실</p>
+  <h1>확률을 얼마나 믿을지 기준값으로 정합니다</h1>
+  <p class="lead">아래 점 하나가 고정 개발용 사진 한 장입니다. 오른쪽에 있을수록 모델이 높은 확률로 답한 사진입니다. 노란 선을 끌어 보세요. 선 왼쪽 사진에는 '잘 모르겠어요'라고 답하게 됩니다.</p>
+  <div class="demo">
+    <canvas id="strip" aria-label="예시 사진 60장의 확률 분포와 기준값"></canvas>
+    <p class="live" id="live"></p>
+    <p class="note" style="margin-top:0">수업 슬라이드의 예시 60장입니다. 자기 모델로 해 보려면 아래 1번으로 가세요.</p>
+  </div>
+</div></div>
+
+<main class="hub">
+  <ol class="flow">
+    <li><div><h2>기준값 정하기</h2>
+      <p>모델 파일 3개와 고정 개발용 사진을 넣으면 기준값별로 답한 비율, 정확도, 틀린 답 수가 표로 나옵니다. 목표 정확도를 먼저 정하고 그 목표를 넘는 가장 낮은 기준값을 고릅니다.</p>
+      <p class="write">활동지 1번에 기준값별 표와 고른 기준값, 고른 이유를 적습니다.</p></div>
+      <a class="btn" href="./threshold.html">기준값 실험기 열기</a></li>
+    <li><div><h2>학생용 화면 v1 만들기</h2>
+      <p>틀 파일 맨 위의 설정 네 가지(제목, 학년군, 기준값, 클래스별 문구)를 고치면 됩니다. 이미 만든 index.html 이 있으면 기준값 줄과 문구만 옮겨도 됩니다.</p>
+      <p class="write">활동지 2번에 학년군별 문구와 '잘 모르겠어요'일 때 보여 줄 안내를 적습니다.</p></div>
+      <a class="btn" href="./student_v1.html">학생용 화면 틀 열기</a></li>
+    <li><div><h2>교실 기기에서 확인하기</h2>
+      <p>학생이 쓸 태블릿이나 크롬북에서 주소가 열리는지, 카메라가 켜지는지, 글자가 읽을 만한지 봅니다. 자기 배포 주소 뒤에 /device_check.html 을 붙여 여는 것이 실제와 같은 조건입니다.</p>
+      <p class="write">활동지 3번 기기 점검표에 결과를 붙입니다.</p></div>
+      <a class="btn" href="./device_check.html">기기 점검 열기</a></li>
+    <li><div><h2>12주차 서로 써 보기 준비</h2>
+      <p>다음 주에는 다른 선생님이 내 앱을 5분 동안 씁니다. 배포 주소, 써 볼 물건이나 사진 카드 5개, 관찰 기록지를 준비합니다. 주소는 시크릿 창에서 한 번 열어 보고 옵니다.</p>
+      <p class="write">활동지 4번에 준비물과 관찰할 것 세 가지를 적습니다.</p></div></li>
+  </ol>
+
+  <div class="two">
+    <section>
+      <h2>막혔을 때</h2>
+      <details><summary>파일을 더블 클릭했는데 모델을 못 읽는다고 나와요</summary>
+        <p>정상입니다. 화면의 '모델 파일 3개'에서 티처블 머신 내보내기 압축을 푼 model.json, metadata.json, weights.bin 을 한꺼번에 고르면 됩니다. 인터넷은 켜져 있어야 합니다.</p></details>
+      <details><summary>사진을 넣었는데 정답을 못 읽었다고 나와요</summary>
+        <p>파일 이름의 밑줄 앞부분이나 폴더 이름이 모델의 클래스 이름과 글자 하나까지 같아야 합니다. can_01.jpg 인데 클래스가 Can 이면 됩니다(대소문자는 봐줍니다). bad_knee_01.jpg 인데 클래스가 '무릎나옴'이면 안 됩니다.</p></details>
+      <details><summary>어떤 기준값으로도 목표 정확도가 안 나와요</summary>
+        <p>기준값은 낮은 확률로 틀린 사진만 걸러 냅니다. 높은 확률로 틀린 사진이 많으면 기준값으로는 안 됩니다. 10주차 가리기 실험으로 원인을 보고 데이터를 먼저 고치세요. 그 결과도 그대로 적으면 됩니다.</p></details>
+      <details><summary>배포 주소를 열면 'You Need Access'가 떠요</summary>
+        <p>Vercel 프로젝트의 Settings, Deployment Protection 에서 Vercel Authentication 을 끄고 저장하세요. 그리고 주소는 중간에 난수가 든 긴 주소가 아니라 Settings, Domains 에 있는 짧은 주소를 씁니다.</p></details>
+      <details><summary>포즈 프로젝트인데 써도 되나요</summary>
+        <p>기준값 실험기와 학생용 화면 틀은 포즈 모델도 읽습니다. 판정에 쓰는 관절이 사진에 다 보여야 합니다.</p></details>
+      <details><summary>학교 태블릿에서 카메라가 안 켜져요</summary>
+        <p>주소가 https 인지, 주소창 자물쇠에서 카메라가 허용인지 보세요. 관리 기기는 관리자 설정으로 막혀 있을 수 있습니다. 그 경우 '사진 고르기'로 쓰는 것을 기본으로 잡고 그 사실을 보고서 한계에 적습니다.</p></details>
+    </section>
+    <section>
+      <h2>읽을거리</h2>
+      <ul class="refs">
+        <li><a href="https://proceedings.mlr.press/v70/guo17a.html">Guo, Pleiss, Sun, Weinberger (2017). On Calibration of Modern Neural Networks. ICML 2017, PMLR 70, 1321-1330.</a>
+          <span class="why">모델이 낸 확률과 실제로 맞는 비율이 어긋난다는 것을 보인 논문. 오늘 '확률은 믿을 만한가' 표의 출처.</span></li>
+        <li><a href="https://arxiv.org/abs/1610.02136">Hendrycks, Gimpel (2017). A Baseline for Detecting Misclassified and Out-of-Distribution Examples in Neural Networks. ICLR 2017.</a>
+          <span class="why">틀린 사진과 처음 보는 사진은 가장 높은 확률이 낮은 경향이 있다는 것. 기준값을 쓰는 근거.</span></li>
+        <li><a href="https://papers.nips.cc/paper/2017/hash/4a8423d5e91fda00bb7e46540e2b0cf1-Abstract.html">Geifman, El-Yaniv (2017). Selective Classification for Deep Neural Networks. NIPS 2017.</a>
+          <span class="why">답하지 않을 권리를 주면 답한 것의 오류가 줄어든다는 것. 답한 비율과 오류를 같이 보는 표의 출처.</span></li>
+        <li><a href="https://pair.withgoogle.com/chapter/explainability-trust/">Google PAIR. People + AI Guidebook, Explainability + Trust</a>
+          <span class="why">확률을 사용자에게 보여 주는 세 가지 방법(구간, 후보 여러 개, 숫자)과 숫자를 조심해야 하는 이유. 학년군별 화면의 근거. 영문.</span></li>
+        <li><a href="https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia">MDN. MediaDevices.getUserMedia()</a>
+          <span class="why">카메라가 https 주소에서만 켜지는 이유와 오류 이름. 영문.</span></li>
+        <li><a href="https://vercel.com/docs/deployment-protection">Vercel. Deployment Protection</a>
+          <span class="why">배포 주소가 로그인으로 넘어갈 때 보는 문서.</span></li>
+      </ul>
+    </section>
+  </div>
+</main>
+<footer>사진과 모델은 이 브라우저 안에서만 처리됩니다. 2026학년도 2학기 그래픽스개론, 박선우.</footer>
+<script>
+const DEMO = [{"truth":"plastic","pred":"plastic","pmax":0.76},{"truth":"plastic","pred":"plastic","pmax":0.97},{"truth":"plastic","pred":"plastic","pmax":0.9},{"truth":"plastic","pred":"plastic","pmax":0.82},{"truth":"plastic","pred":"plastic","pmax":0.74},{"truth":"plastic","pred":"plastic","pmax":0.54},{"truth":"plastic","pred":"plastic","pmax":0.89},{"truth":"plastic","pred":"plastic","pmax":0.98},{"truth":"plastic","pred":"plastic","pmax":0.99},{"truth":"plastic","pred":"plastic","pmax":0.98},{"truth":"plastic","pred":"plastic","pmax":0.9},{"truth":"plastic","pred":"plastic","pmax":0.95},{"truth":"plastic","pred":"plastic","pmax":0.58},{"truth":"plastic","pred":"plastic","pmax":0.47},{"truth":"plastic","pred":"plastic","pmax":0.99},{"truth":"plastic","pred":"plastic","pmax":0.76},{"truth":"plastic","pred":"plastic","pmax":0.55},{"truth":"plastic","pred":"plastic","pmax":0.99},{"truth":"plastic","pred":"plastic","pmax":0.98},{"truth":"can","pred":"can","pmax":0.87},{"truth":"can","pred":"can","pmax":0.93},{"truth":"can","pred":"can","pmax":0.92},{"truth":"can","pred":"can","pmax":0.97},{"truth":"can","pred":"can","pmax":0.96},{"truth":"can","pred":"can","pmax":0.94},{"truth":"can","pred":"can","pmax":0.88},{"truth":"can","pred":"can","pmax":0.96},{"truth":"can","pred":"can","pmax":0.99},{"truth":"can","pred":"can","pmax":0.46},{"truth":"can","pred":"can","pmax":0.96},{"truth":"can","pred":"can","pmax":0.95},{"truth":"can","pred":"can","pmax":0.91},{"truth":"can","pred":"can","pmax":0.97},{"truth":"can","pred":"can","pmax":0.68},{"truth":"can","pred":"can","pmax":0.96},{"truth":"can","pred":"can","pmax":0.91},{"truth":"can","pred":"can","pmax":0.99},{"truth":"paper","pred":"paper","pmax":0.97},{"truth":"paper","pred":"paper","pmax":0.81},{"truth":"paper","pred":"paper","pmax":0.96},{"truth":"paper","pred":"paper","pmax":0.95},{"truth":"paper","pred":"paper","pmax":0.98},{"truth":"paper","pred":"paper","pmax":0.97},{"truth":"paper","pred":"paper","pmax":0.95},{"truth":"paper","pred":"paper","pmax":0.97},{"truth":"paper","pred":"paper","pmax":0.84},{"truth":"paper","pred":"paper","pmax":0.98},{"truth":"paper","pred":"paper","pmax":0.98},{"truth":"paper","pred":"paper","pmax":0.95},{"truth":"paper","pred":"paper","pmax":0.99},{"truth":"paper","pred":"paper","pmax":0.71},{"truth":"paper","pred":"paper","pmax":0.67},{"truth":"paper","pred":"paper","pmax":0.95},{"truth":"paper","pred":"paper","pmax":0.88},{"truth":"paper","pred":"paper","pmax":0.94},{"truth":"paper","pred":"paper","pmax":0.97},{"truth":"plastic","pred":"can","pmax":0.71},{"truth":"can","pred":"plastic","pmax":0.97},{"truth":"can","pred":"paper","pmax":0.55},{"truth":"paper","pred":"can","pmax":0.62}];
+const $ = (id) => document.getElementById(id);
+let th = 0.70;
+function stat() { const ans = DEMO.filter(r => r.pmax >= th); const ok = ans.filter(r => r.truth === r.pred).length; return { n: DEMO.length, a: ans.length, ok, bad: ans.length - ok, un: DEMO.length - ans.length }; }
+function draw() {
+  const cv = $("strip"), dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr; const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
+  const L = 14, R = 14, T = 22, B = 28, x0 = 0.3, X = (p) => L + (p - x0) / (1 - x0) * (W - L - R);
+  const css = getComputedStyle(document.documentElement), col = (n) => css.getPropertyValue(n).trim();
+  c.font = "12px 'IBM Plex Sans KR', sans-serif"; c.textAlign = "center"; c.fillStyle = col("--mute"); c.strokeStyle = col("--line");
+  for (let t = 0.3; t <= 1.0001; t += 0.1) { const x = X(t); c.beginPath(); c.moveTo(x, T); c.lineTo(x, H - B); c.stroke(); c.fillText(t.toFixed(1), x, H - B + 15); }
+  const mid = T + (H - T - B) * 0.64;
+  c.setLineDash([4, 4]); c.beginPath(); c.moveTo(L, mid); c.lineTo(W - R, mid); c.stroke(); c.setLineDash([]);
+  c.textAlign = "left"; c.fillText("맞은 사진", L + 4, T + 11); c.fillText("틀린 사진", L + 4, mid + 14);
+  c.fillStyle = "rgba(138,148,163,0.22)"; c.fillRect(L, T, Math.max(0, X(th) - L), H - T - B);
+  DEMO.forEach((r, i) => { const ok = r.truth === r.pred, [a, b] = ok ? [T + 20, mid - 9] : [mid + 22, H - B - 9];
+    const h = ((i * 2654435761) >>> 0) / 4294967296, x = X(r.pmax), y = a + h * (b - a), ans = r.pmax >= th;
+    c.beginPath(); c.arc(x, y, 5.5, 0, Math.PI * 2); c.fillStyle = !ans ? col("--unsure") : ok ? col("--ok") : col("--bad"); c.globalAlpha = ans ? .9 : .55; c.fill(); c.globalAlpha = 1; });
+  const tx = X(th); c.strokeStyle = col("--bar"); c.lineWidth = 3; c.beginPath(); c.moveTo(tx, T - 6); c.lineTo(tx, H - B); c.stroke();
+  c.fillStyle = col("--bar"); c.beginPath(); c.arc(tx, T - 6, 7, 0, Math.PI * 2); c.fill();
+  cv._inv = (px) => x0 + (px - L) / (W - L - R) * (1 - x0);
+  const s = stat();
+  $("live").innerHTML = "기준값 " + th.toFixed(2) + "이면 " + s.n + "장 중 <span class=\"n-ok\">" + s.a + "장에 답하고</span>, 그중 <span class=\"n-bad\">" + s.bad + "장이 틀립니다</span>. <span class=\"n-un\">" + s.un + "장은 잘 모르겠어요</span>.";
+}
+(() => { const cv = $("strip"); let drag = false;
+  const set = (ev) => { const r = cv.getBoundingClientRect(); th = Math.min(0.99, Math.max(0.30, Math.round(cv._inv(ev.clientX - r.left) * 100) / 100)); draw(); };
+  cv.addEventListener("pointerdown", (ev) => { drag = true; cv.setPointerCapture(ev.pointerId); set(ev); });
+  cv.addEventListener("pointermove", (ev) => { if (drag) set(ev); });
+  cv.addEventListener("pointerup", () => drag = false); cv.addEventListener("pointercancel", () => drag = false);
+  cv.tabIndex = 0;
+  cv.addEventListener("keydown", (ev) => { if (ev.key === "ArrowLeft") { th = Math.max(0.30, +(th - 0.01).toFixed(2)); draw(); } if (ev.key === "ArrowRight") { th = Math.min(0.99, +(th + 0.01).toFixed(2)); draw(); } });
+  window.addEventListener("resize", draw);
+})();
+draw(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
+</script>
+</body>
+</html>

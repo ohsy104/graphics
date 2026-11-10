@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>기준값 실험기</title>
+<!-- 그래픽스개론 11주차. 고정 개발용 사진으로 '잘 모르겠어요' 기준값을 정하는 도구.
+     사진마다 가장 높은 확률을 구해 한 줄에 늘어놓고, 기준값을 움직이면 답한 비율과 틀린 답 수가 어떻게 바뀌는지 본다.
+     사진과 모델은 브라우저 안에서만 처리하고 외부로 보내지 않는다. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+<style>
+  :root { --bg:#EEF1F5; --card:#FFFFFF; --ink:#10233F; --navy:#0B3A75; --line:#D5DCE6; --mute:#5C6B80;
+          --ok:#0E8A7B; --bad:#D1345B; --unsure:#8A94A3; --bar:#F2B90F; --soft:#F6F8FB; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"IBM Plex Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif; font-size:15px; line-height:1.6; }
+  a { color:var(--navy); }
+  .top { background:var(--navy); color:#fff; padding:18px 24px 16px; }
+  .top .in { max-width:1180px; margin:0 auto; display:flex; gap:18px; align-items:baseline; flex-wrap:wrap; }
+  .top h1 { margin:0; font-size:22px; font-weight:700; letter-spacing:-0.01em; }
+  .top p { margin:0; font-size:13.5px; opacity:.88; flex:1 1 420px; }
+  .top a { color:#fff; font-size:13px; opacity:.85; }
+  main { max-width:1180px; margin:20px auto 48px; padding:0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px; }
+  h2 { font-size:16px; margin:0 0 10px; font-weight:700; color:var(--navy); }
+  h3 { font-size:14px; margin:14px 0 6px; font-weight:700; }
+  label { display:block; font-size:13px; margin:10px 0 4px; font-weight:600; }
+  .note { font-size:13px; color:var(--mute); margin:6px 0 0; }
+  .status { font-size:13.5px; padding:8px 10px; background:var(--soft); border-left:4px solid var(--navy); border-radius:4px; margin:8px 0; }
+  .warn { background:#FFF7DB; border:1px solid #E0A800; border-radius:6px; padding:8px 10px; font-size:13px; margin-top:8px; }
+  .warn:empty { display:none; }
+  [hidden] { display:none !important; }   /* display 를 따로 준 요소도 hidden 이면 확실히 감춤 */
+  button, .btn { font:inherit; font-size:14px; font-weight:600; padding:8px 14px; border-radius:7px; border:1px solid var(--navy); background:var(--navy); color:#fff; cursor:pointer; }
+  button.ghost { background:#fff; color:var(--navy); }
+  button:disabled { background:#B8C2D0; border-color:#B8C2D0; color:#fff; cursor:default; }
+  button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline:3px solid var(--bar); outline-offset:2px; }
+  input[type=file] { font-size:13.5px; max-width:100%; }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; font-variant-numeric:tabular-nums; }
+  th, td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:right; }
+  th { background:var(--soft); font-weight:600; text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
+
+  .layout { display:grid; grid-template-columns: 320px 1fr; gap:16px; align-items:start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .steps { counter-reset: step; }
+  .steps .step { position:relative; padding-left:34px; margin-bottom:16px; }
+  .steps .step::before { counter-increment: step; content: counter(step); position:absolute; left:0; top:0; width:24px; height:24px; border-radius:50%;
+                         background:var(--navy); color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .steps .step > strong { display:block; font-size:14.5px; margin-bottom:4px; }
+  #plotwrap { position:relative; }
+  #plot { width:100%; height:300px; display:block; touch-action:none; cursor:ew-resize; border-radius:8px; background:var(--soft); }
+  #tip { position:absolute; pointer-events:none; background:#10233F; color:#fff; font-size:12.5px; padding:6px 8px; border-radius:6px; display:none; max-width:240px; z-index:2; }
+  #tip img { display:block; width:96px; height:96px; object-fit:cover; border-radius:4px; margin-bottom:4px; background:#33455f; }
+  .thbar { display:flex; align-items:center; gap:12px; margin-top:10px; flex-wrap:wrap; }
+  .thbar input[type=range] { flex:1 1 260px; accent-color: var(--bar); }
+  .thval { font-size:34px; font-weight:700; font-variant-numeric:tabular-nums; min-width:92px; }
+  .reads { display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; margin-top:12px; }
+  @media (max-width: 700px) { .reads { grid-template-columns: repeat(2, 1fr); } }
+  .read { border-top:4px solid var(--line); padding-top:6px; }
+  .read b { display:block; font-size:24px; font-variant-numeric:tabular-nums; line-height:1.2; }
+  .read span { font-size:12.5px; color:var(--mute); }
+  .read.ok { border-color:var(--ok); } .read.bad { border-color:var(--bad); } .read.un { border-color:var(--unsure); } .read.cov { border-color:var(--navy); }
+  tr.cur td { background:#FFF4C7; font-weight:600; }
+  tr.rec td:first-child::after { content:" 권장"; color:var(--ok); font-weight:700; font-size:12px; }
+  .grid2 { display:grid; grid-template-columns: 1.25fr 1fr; gap:16px; margin-top:16px; }
+  @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+  .gallery { display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:8px; }
+  .gcard { border:1px solid var(--line); border-radius:8px; padding:6px; font-size:12px; text-align:center; word-break:break-all; }
+  .gcard img, .gcard .ph { width:100%; aspect-ratio:1; object-fit:cover; border-radius:5px; background:#E3E8EF; display:block; margin-bottom:4px; }
+  .gcard b { color:var(--bad); }
+  .legend { font-size:12.5px; color:var(--mute); display:flex; gap:14px; flex-wrap:wrap; margin-top:6px; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+  .demo-tag { display:none; background:var(--bar); color:#3b2f00; font-size:12px; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:8px; }
+  .gapbar { display:inline-block; height:8px; border-radius:4px; vertical-align:middle; }
+</style>
+</head>
+<body>
+<div class="top"><div class="in">
+  <h1>기준값 실험기</h1>
+  <p>고정 개발용 사진마다 모델의 가장 높은 확률을 구해 한 줄에 늘어놓습니다. 기준값을 움직이면 그 아래 사진은 '잘 모르겠어요'가 됩니다.</p>
+  <a href="./week11.html">11주차 실습실</a>
+</div></div>
+<main>
+  <div class="layout">
+    <section class="card steps" aria-label="준비">
+      <div class="step"><strong>모델 고르기</strong>
+        <div class="status" id="mstatus">모델을 찾는 중입니다...</div>
+        <label for="mfiles">모델 파일 3개 (model.json, metadata.json, weights.bin)</label>
+        <input type="file" id="mfiles" accept=".json,.bin" multiple>
+        <p class="note">배포 주소의 모델과 같은 폴더에 이 파일을 두면 자동으로 읽습니다. 이미지 프로젝트와 포즈 프로젝트 모두 됩니다.</p>
+      </div>
+      <div class="step"><strong>고정 개발용 사진 넣기</strong>
+        <label for="photos">사진 여러 장</label>
+        <input type="file" id="photos" accept="image/*" multiple disabled>
+        <label for="folder">또는 폴더째로</label>
+        <input type="file" id="folder" webkitdirectory multiple disabled>
+        <p class="note">정답은 파일 이름의 밑줄 앞(can_01.jpg 이면 can)이나 폴더 이름에서 읽습니다. 클래스 이름과 글자가 같아야 합니다.</p>
+        <div class="warn" id="unmatched"></div>
+      </div>
+      <div class="step"><strong>실행하고 기준값 움직이기</strong>
+        <div class="row">
+          <button id="run" disabled>예측 실행</button>
+          <button id="demo" class="ghost">예시 데이터로 보기</button>
+        </div>
+        <p class="note" id="progress"></p>
+        <div class="row" style="margin-top:8px">
+          <button id="csv" class="ghost" disabled>CSV 내려받기</button>
+          <button id="png" class="ghost" disabled>그림 저장</button>
+        </div>
+      </div>
+      <p class="note">최종 테스트용 사진은 여기에 넣지 않습니다. 기준값은 개발용으로 정하고, 최종 테스트는 14주차에 한 번만 합니다.</p>
+    </section>
+
+    <section class="card" aria-label="결과">
+      <h2>사진을 확률 순으로 늘어놓은 것 <span class="demo-tag" id="demotag">예시 데이터</span></h2>
+      <div id="plotwrap">
+        <canvas id="plot"></canvas>
+        <div id="tip"></div>
+      </div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--ok)"></i>맞은 사진</span>
+        <span><i class="dot" style="background:var(--bad)"></i>틀린 사진</span>
+        <span><i class="dot" style="background:var(--unsure)"></i>기준값 아래라 '잘 모르겠어요'</span>
+        <span>노란 선을 끌거나 아래 막대를 움직이세요</span>
+      </div>
+      <div class="thbar">
+        <div><span class="note" style="margin:0">기준값</span><div class="thval" id="thval">0.70</div></div>
+        <input type="range" id="th" min="0.30" max="0.99" step="0.01" value="0.70" aria-label="기준값">
+        <label style="margin:0;font-weight:400">목표 정확도 <input type="number" id="target" value="95" min="50" max="100" step="1" style="width:64px;font:inherit;padding:3px 6px"> %</label>
+      </div>
+      <div class="reads">
+        <div class="read cov"><b id="rAns">-</b><span>답한 사진 (답한 비율)</span></div>
+        <div class="read ok"><b id="rOk">-</b><span>답한 것 중 맞은 사진 (정확도)</span></div>
+        <div class="read bad"><b id="rBad">-</b><span>틀린 채로 답한 사진</span></div>
+        <div class="read un"><b id="rUn">-</b><span>잘 모르겠어요 (그중 맞았을 사진)</span></div>
+      </div>
+      <div class="status" id="advice">모델과 사진을 넣고 실행하면 기준값별 표가 나옵니다. 먼저 구경하려면 '예시 데이터로 보기'를 누르세요.</div>
+    </section>
+  </div>
+
+  <div class="grid2">
+    <section class="card">
+      <h2>기준값별 표</h2>
+      <table id="ttable"><thead><tr><th>기준값</th><th>답한 사진</th><th>답한 비율</th><th>맞은 사진</th><th>정확도</th><th>틀린 답</th><th>모르겠어요</th><th>그중 맞았을</th></tr></thead><tbody></tbody></table>
+      <p class="note">정확도는 답한 사진 중에서 맞은 비율입니다. '그중 맞았을'은 기준값 때문에 답을 안 했지만 원래 판정은 맞았던 사진 수입니다. 기준값을 올릴 때 치르는 값입니다.</p>
+    </section>
+    <section class="card">
+      <h2>확률은 믿을 만한가</h2>
+      <table id="rtable"><thead><tr><th>확률 구간</th><th>사진 수</th><th>평균 확률</th><th>실제 정확도</th><th>차이</th></tr></thead><tbody></tbody></table>
+      <p class="note">평균 확률이 0.96인 구간이면 그 구간 사진의 96%쯤이 맞아야 합니다. 차이가 음수면 확률이 실제보다 높게 나온 것입니다. 사진 수가 5장이 안 되는 구간은 참고만 하세요.</p>
+      <h3>클래스별 (지금 기준값)</h3>
+      <table id="ctable"><thead><tr><th>클래스</th><th>사진</th><th>맞게 답함</th><th>틀리게 답함</th><th>모르겠어요</th></tr></thead><tbody></tbody></table>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:16px">
+    <h2>기준값으로 못 거르는 사진</h2>
+    <p class="note" style="margin-top:0">확률 0.90 이상으로 틀린 사진입니다. 기준값을 올려도 남습니다. 10주차 가리기 실험으로 원인을 보고 데이터로 고칠 사진입니다.</p>
+    <div class="gallery" id="gallery"></div>
+  </section>
+</main>
+<script>
+// ===== 티처블 머신 모델 불러오기 (이미지 프로젝트와 포즈 프로젝트 모두) =====
+// 1) 이 화면과 같은 주소 아래에서 모델 폴더를 찾고 2) 없으면 파일 3개를 직접 고르게 한다. 파일은 브라우저 밖으로 나가지 않는다.
+const TM = { model: null, kind: null, labels: [] };
+const TM_BASES = ["./", "./my_model/", "./model/", "./models/", "./tm_model/", "./my-model/", "./public/", "./assets/", "./static/"];
+function tmNormBase(b) { b = b.trim().replace(/model\.json$/, "").replace(/metadata\.json$/, ""); if (!b) return "./"; if (!b.endsWith("/")) b += "/"; return b; }
+async function tmBasesFromIndex() {
+  const found = [];
+  try {
+    const r = await fetch("./index.html", { cache: "no-store" }); if (!r.ok) return found;
+    const html = await r.text();
+    for (const m of html.matchAll(/(?:URL|url|modelURL|MODEL_URL|modelUrl|modelPath|MODEL_PATH|base|BASE)\s*=\s*["'`]([^"'`]{1,300}?)["'`]/g)) found.push(tmNormBase(m[1]));
+    for (const m of html.matchAll(/["'`]([^"'`\s]{0,300}\/)(?:model|metadata)\.json["'`]/g)) found.push(tmNormBase(m[1]));
+  } catch (e) { }
+  return found;
+}
+async function tmFindBase(tried) {
+  const bases = [];
+  for (const b of [...await tmBasesFromIndex(), ...TM_BASES]) if (!bases.includes(b)) bases.push(b);
+  for (const b of bases) {
+    tried.push(b);
+    try { const r = await fetch(b + "metadata.json", { cache: "no-store" }); if (!r.ok) continue; const j = await r.json(); if (j && Array.isArray(j.labels)) return { base: b, meta: j }; } catch (e) { }
+  }
+  return null;
+}
+function tmKindOf(meta) { return /pose/i.test((meta && meta.packageName) || "") ? "pose" : "image"; }
+function tmFinish(model, kind) {
+  // 메타데이터에 종류가 없을 때를 대비해 입력 모양으로 한 번 더 확인 ([224,224,3] 이면 이미지, [14739] 같은 한 줄이면 포즈)
+  const shp = (model.model && model.model.inputs && model.model.inputs[0]) ? model.model.inputs[0].shape : null;
+  if (shp && shp.length === 4) kind = "image";
+  if (shp && shp.length === 2) kind = "pose";
+  TM.model = model; TM.kind = kind; TM.labels = model.getClassLabels();
+}
+function tmLib(kind) {
+  if (kind === "pose") { if (typeof tmPose === "undefined") throw new Error("포즈 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요."); return tmPose; }
+  if (typeof tmImage === "undefined") throw new Error("이미지 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요.");
+  return tmImage;
+}
+async function tmLoadAuto() {            // 반환: {ok, how, tried}
+  const tried = [];
+  if (location.protocol === "file:") return { ok: false, local: true, tried };
+  const hit = await tmFindBase(tried);
+  if (!hit) return { ok: false, tried };
+  const kind = tmKindOf(hit.meta);
+  const m = await tmLib(kind).load(hit.base + "model.json", hit.base + "metadata.json");
+  tmFinish(m, kind);
+  return { ok: true, how: hit.base === "./" ? "같은 폴더" : hit.base, tried };
+}
+async function tmLoadFiles(fileList) {
+  const fs = Array.from(fileList);
+  const pick = (test) => fs.find(f => test(f.name.toLowerCase()));
+  const mj = pick(n => n === "model.json" || (n.endsWith(".json") && n.includes("model")));
+  const md = pick(n => n === "metadata.json" || (n.endsWith(".json") && n.includes("meta")));
+  const wb = pick(n => n.endsWith(".bin"));
+  if (!mj || !md || !wb) throw new Error("세 파일(model.json, metadata.json, weights.bin)을 한꺼번에 골라야 합니다. 지금 고른 것: " + fs.map(f => f.name).join(", "));
+  let meta = {}; try { meta = JSON.parse(await md.text()); } catch (e) { }
+  const kind = tmKindOf(meta);
+  const m = await tmLib(kind).loadFromFiles(mj, wb, md);
+  tmFinish(m, kind);
+}
+async function tmPredict(el) {            // 반환: 클래스 순서대로 확률 배열
+  let pred;
+  if (TM.kind === "pose") { const r = await TM.model.estimatePose(el, false); pred = await TM.model.predict(r.posenetOutput); }
+  else pred = await TM.model.predict(el);
+  return pred.map(p => p.probability);
+}
+
+
+// 예시 데이터 (수업 슬라이드의 60장 예시와 같은 값)
+const DEMO = [{"truth":"plastic","pred":"plastic","pmax":0.76},{"truth":"plastic","pred":"plastic","pmax":0.97},{"truth":"plastic","pred":"plastic","pmax":0.9},{"truth":"plastic","pred":"plastic","pmax":0.82},{"truth":"plastic","pred":"plastic","pmax":0.74},{"truth":"plastic","pred":"plastic","pmax":0.54},{"truth":"plastic","pred":"plastic","pmax":0.89},{"truth":"plastic","pred":"plastic","pmax":0.98},{"truth":"plastic","pred":"plastic","pmax":0.99},{"truth":"plastic","pred":"plastic","pmax":0.98},{"truth":"plastic","pred":"plastic","pmax":0.9},{"truth":"plastic","pred":"plastic","pmax":0.95},{"truth":"plastic","pred":"plastic","pmax":0.58},{"truth":"plastic","pred":"plastic","pmax":0.47},{"truth":"plastic","pred":"plastic","pmax":0.99},{"truth":"plastic","pred":"plastic","pmax":0.76},{"truth":"plastic","pred":"plastic","pmax":0.55},{"truth":"plastic","pred":"plastic","pmax":0.99},{"truth":"plastic","pred":"plastic","pmax":0.98},{"truth":"can","pred":"can","pmax":0.87},{"truth":"can","pred":"can","pmax":0.93},{"truth":"can","pred":"can","pmax":0.92},{"truth":"can","pred":"can","pmax":0.97},{"truth":"can","pred":"can","pmax":0.96},{"truth":"can","pred":"can","pmax":0.94},{"truth":"can","pred":"can","pmax":0.88},{"truth":"can","pred":"can","pmax":0.96},{"truth":"can","pred":"can","pmax":0.99},{"truth":"can","pred":"can","pmax":0.46},{"truth":"can","pred":"can","pmax":0.96},{"truth":"can","pred":"can","pmax":0.95},{"truth":"can","pred":"can","pmax":0.91},{"truth":"can","pred":"can","pmax":0.97},{"truth":"can","pred":"can","pmax":0.68},{"truth":"can","pred":"can","pmax":0.96},{"truth":"can","pred":"can","pmax":0.91},{"truth":"can","pred":"can","pmax":0.99},{"truth":"paper","pred":"paper","pmax":0.97},{"truth":"paper","pred":"paper","pmax":0.81},{"truth":"paper","pred":"paper","pmax":0.96},{"truth":"paper","pred":"paper","pmax":0.95},{"truth":"paper","pred":"paper","pmax":0.98},{"truth":"paper","pred":"paper","pmax":0.97},{"truth":"paper","pred":"paper","pmax":0.95},{"truth":"paper","pred":"paper","pmax":0.97},{"truth":"paper","pred":"paper","pmax":0.84},{"truth":"paper","pred":"paper","pmax":0.98},{"truth":"paper","pred":"paper","pmax":0.98},{"truth":"paper","pred":"paper","pmax":0.95},{"truth":"paper","pred":"paper","pmax":0.99},{"truth":"paper","pred":"paper","pmax":0.71},{"truth":"paper","pred":"paper","pmax":0.67},{"truth":"paper","pred":"paper","pmax":0.95},{"truth":"paper","pred":"paper","pmax":0.88},{"truth":"paper","pred":"paper","pmax":0.94},{"truth":"paper","pred":"paper","pmax":0.97},{"truth":"plastic","pred":"can","pmax":0.71},{"truth":"can","pred":"plastic","pmax":0.97},{"truth":"can","pred":"paper","pmax":0.55},{"truth":"paper","pred":"can","pmax":0.62}];
+
+const $ = (id) => document.getElementById(id);
+let rows = [];          // {name, truth, pred, pmax, ok, thumb}
+let isDemo = false;
+let files = [];
+const GRID = [0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95];
+
+// ---------- 모델 ----------
+function modelMsg(how) {
+  $("mstatus").textContent = "모델을 불러왔습니다 (" + how + "). " + (TM.kind === "pose" ? "포즈 프로젝트" : "이미지 프로젝트") + ", 클래스 " + TM.labels.length + "개: " + TM.labels.join(", ");
+  $("photos").disabled = false; $("folder").disabled = false; checkFiles();
+}
+(async () => {
+  try {
+    const r = await tmLoadAuto();
+    if (r.ok) modelMsg(r.how);
+    else $("mstatus").textContent = r.local ? "파일을 직접 열었습니다. 아래에서 모델 파일 3개를 고르세요." : "이 주소 아래에서 모델을 찾지 못했습니다 (찾아본 곳: " + r.tried.join(" ") + "). 아래에서 세 파일을 고르세요.";
+  } catch (e) { $("mstatus").textContent = "모델을 읽지 못했습니다. " + e.message; }
+})();
+$("mfiles").addEventListener("change", async (ev) => {
+  try { $("mstatus").textContent = "모델을 읽는 중..."; await tmLoadFiles(ev.target.files); modelMsg("고른 파일"); }
+  catch (e) { $("mstatus").textContent = "모델을 읽지 못했습니다. " + e.message; }
+});
+
+// ---------- 사진과 정답 ----------
+const norm = (s) => s.toLowerCase().replace(/\s+/g, "");
+function truthOf(f) {
+  // 파일 이름의 밑줄·하이픈 앞, 그리고 폴더 이름 가운데 클래스 이름과 같은 것을 정답으로 본다
+  const base = f.name.replace(/\.[^.]+$/, "");
+  const cands = [base.split("_")[0], base.split("-")[0], base.replace(/[\s_\-]*\(?\d+\)?$/, "")];
+  const path = (f.webkitRelativePath || "").split("/").slice(0, -1);
+  for (const c of [...cands, ...path.reverse()]) { const i = TM.labels.findIndex(l => norm(l) === norm(c)); if (i >= 0) return i; }
+  return -1;
+}
+function showUnmatched(bad) {
+  $("unmatched").innerHTML = bad.length ? "정답을 못 읽은 파일 " + bad.length + "장은 빼고 계산합니다. 예: " + bad.slice(0, 3).map(f => f.name).join(", ") +
+    ". 파일 이름 밑줄 앞이나 폴더 이름을 클래스 이름(" + TM.labels.join(", ") + ")과 글자 하나까지 같게 하세요." : "";
+}
+function checkFiles() {
+  if (!TM.model || !files.length) { $("run").disabled = true; return; }
+  const bad = files.filter(f => truthOf(f) < 0);
+  showUnmatched(bad);
+  $("run").disabled = files.length === bad.length;
+  $("progress").textContent = "사진 " + files.length + "장 가운데 " + (files.length - bad.length) + "장의 정답을 읽었습니다.";
+}
+function takeFiles(list) { files = Array.from(list).filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|gif|bmp|jfif)$/i.test(f.name)); checkFiles(); }
+$("photos").addEventListener("change", (ev) => takeFiles(ev.target.files));
+$("folder").addEventListener("change", (ev) => takeFiles(ev.target.files));
+
+function loadImg(file) { return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error("사진을 열 수 없음")); im.src = URL.createObjectURL(file); }); }
+function thumbOf(im) { const c = document.createElement("canvas"); c.width = 96; c.height = 96; const s = Math.min(im.width, im.height);
+  c.getContext("2d").drawImage(im, (im.width - s) / 2, (im.height - s) / 2, s, s, 0, 0, 96, 96); return c.toDataURL("image/jpeg", 0.7); }
+
+$("run").addEventListener("click", async () => {
+  const todo = files.filter(f => truthOf(f) >= 0);
+  rows = []; isDemo = false; $("run").disabled = true; let fail = 0;
+  showUnmatched(files.filter(f => truthOf(f) < 0));
+  for (let i = 0; i < todo.length; i++) {
+    $("progress").textContent = "예측 중 " + (i + 1) + " / " + todo.length;
+    try {
+      const im = await loadImg(todo[i]);
+      const p = await tmPredict(im);
+      let top = 0; for (let k = 1; k < p.length; k++) if (p[k] > p[top]) top = k;
+      const t = truthOf(todo[i]);
+      rows.push({ name: todo[i].name, truth: TM.labels[t], pred: TM.labels[top], pmax: p[top], ok: t === top, thumb: thumbOf(im) });
+      URL.revokeObjectURL(im.src);
+    } catch (e) { fail++; }
+    if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
+  }
+  $("progress").textContent = "끝났습니다. " + rows.length + "장을 예측했습니다." + (fail ? " 열지 못한 사진 " + fail + "장." : "");
+  $("run").disabled = false; afterData();
+});
+$("demo").addEventListener("click", () => {
+  const cnt = {};
+  rows = DEMO.map(r => { cnt[r.truth] = (cnt[r.truth] || 0) + 1; return { name: r.truth + "_" + String(cnt[r.truth]).padStart(2, "0") + ".jpg", truth: r.truth, pred: r.pred, pmax: r.pmax, ok: r.truth === r.pred, thumb: null }; });
+  isDemo = true; $("unmatched").innerHTML = "";   // 예시를 보는 동안에는 내 사진에 대한 안내를 감춤
+  $("progress").textContent = "예시 데이터 60장입니다. 실제 모델 결과가 아닙니다."; afterData();
+});
+
+// ---------- 계산 ----------
+function statAt(th) {
+  const ans = rows.filter(r => r.pmax >= th), ok = ans.filter(r => r.ok).length;
+  const un = rows.length - ans.length, lost = rows.filter(r => r.pmax < th && r.ok).length;
+  return { th, answered: ans.length, cov: rows.length ? ans.length / rows.length : 0, ok, acc: ans.length ? ok / ans.length : null, wrong: ans.length - ok, unsure: un, lost };
+}
+function recommend() {
+  const target = (parseFloat($("target").value) || 95) / 100;
+  for (const t of GRID) { const s = statAt(t); if (s.answered > 0 && s.acc >= target) return s; }
+  return null;
+}
+const pct = (x) => (x * 100).toFixed(1) + "%";
+
+function afterData() {
+  $("demotag").style.display = isDemo ? "inline-block" : "none";
+  $("csv").disabled = !rows.length; $("png").disabled = !rows.length;
+  renderAll();
+}
+function renderAll() {
+  if (!rows.length) { drawPlot(); return; }
+  const th = parseFloat($("th").value), s = statAt(th), rec = recommend();
+  $("thval").textContent = th.toFixed(2);
+  $("rAns").textContent = s.answered + " / " + rows.length + " (" + pct(s.cov) + ")";
+  $("rOk").textContent = s.answered ? s.ok + " (" + pct(s.acc) + ")" : "-";
+  $("rBad").textContent = s.wrong;
+  $("rUn").textContent = s.unsure + " (" + s.lost + ")";
+  // 표
+  const tb = $("ttable").tBodies[0]; tb.innerHTML = "";
+  const ths = GRID.includes(th) ? GRID : [...GRID, th].sort((a, b) => a - b);
+  ths.forEach(t => { const x = statAt(t); const tr = document.createElement("tr");
+    if (Math.abs(t - th) < 1e-9) tr.className = "cur"; if (rec && Math.abs(t - rec.th) < 1e-9) tr.className += " rec";
+    tr.innerHTML = "<td>" + t.toFixed(2) + "</td><td>" + x.answered + "</td><td>" + pct(x.cov) + "</td><td>" + x.ok + "</td><td>" + (x.acc === null ? "-" : pct(x.acc)) + "</td><td>" + x.wrong + "</td><td>" + x.unsure + "</td><td>" + x.lost + "</td>";
+    tb.appendChild(tr); });
+  // 권장
+  const high = rows.filter(r => !r.ok && r.pmax >= 0.9).length;
+  const target = parseFloat($("target").value) || 95;
+  $("advice").innerHTML = (rec ? "목표 정확도 " + target + "%를 넘는 가장 낮은 기준값은 <b>" + rec.th.toFixed(2) + "</b>입니다. 답한 비율 " + pct(rec.cov) + ", 틀린 답 " + rec.wrong + "장, 잘 모르겠어요 " + rec.unsure + "장."
+      : "0.50에서 0.95 사이 어떤 기준값으로도 목표 정확도 " + target + "%에 못 미칩니다. 기준값보다 데이터를 먼저 손봐야 합니다.") +
+    (high ? " 확률 0.90 이상으로 틀린 사진이 " + high + "장 있어 기준값을 올려도 남습니다." : "") +
+    (rows.length < 40 ? " 사진이 " + rows.length + "장이라 한 장이 " + (100 / rows.length).toFixed(1) + "%p를 움직입니다. 숫자를 크게 믿지 마세요." : "");
+  // 구간별
+  const bins = [[0, .5], [.5, .6], [.6, .7], [.7, .8], [.8, .9], [.9, 1.0001]];
+  const rb = $("rtable").tBodies[0]; rb.innerHTML = "";
+  bins.forEach(([lo, hi]) => { const b = rows.filter(r => r.pmax >= lo && r.pmax < hi); if (!b.length) return;
+    const conf = b.reduce((a, r) => a + r.pmax, 0) / b.length, acc = b.filter(r => r.ok).length / b.length, gap = acc - conf;
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + lo.toFixed(1) + " ~ " + Math.min(hi, 1).toFixed(1) + "</td><td>" + b.length + "</td><td>" + conf.toFixed(2) + "</td><td>" + acc.toFixed(2) + "</td><td style=\"color:" + (gap < -0.05 ? "var(--bad)" : "inherit") + "\">" + (gap >= 0 ? "+" : "−") + Math.abs(gap).toFixed(2) + "</td>";
+    rb.appendChild(tr); });
+  // 클래스별
+  const cb = $("ctable").tBodies[0]; cb.innerHTML = "";
+  [...new Set(rows.map(r => r.truth))].forEach(c => { const rc = rows.filter(r => r.truth === c);
+    const a = rc.filter(r => r.pmax >= th); const tr = document.createElement("tr");
+    tr.innerHTML = "<td>" + c + "</td><td>" + rc.length + "</td><td>" + a.filter(r => r.ok).length + "</td><td>" + a.filter(r => !r.ok).length + "</td><td>" + (rc.length - a.length) + "</td>";
+    cb.appendChild(tr); });
+  // 높은 확률 오답
+  const g = $("gallery"); g.innerHTML = "";
+  const hw = rows.filter(r => !r.ok && r.pmax >= 0.9).sort((a, b) => b.pmax - a.pmax);
+  if (!hw.length) g.innerHTML = "<p class=\"note\">확률 0.90 이상으로 틀린 사진이 없습니다.</p>";
+  hw.forEach(r => { const d = document.createElement("div"); d.className = "gcard";
+    d.innerHTML = (r.thumb ? "<img alt=\"\" src=\"" + r.thumb + "\">" : "<div class=\"ph\"></div>") + r.name + "<br>" + r.truth + " → <b>" + r.pred + " " + r.pmax.toFixed(2) + "</b>"; g.appendChild(d); });
+  drawPlot();
+}
+
+// ---------- 그림: 사진 한 장이 점 하나 ----------
+let pts = [];
+function xmin() { const k = Math.max(2, new Set(rows.map(r => r.truth)).size || 3); return Math.max(0, Math.floor((1 / k) * 10) / 10 - 0.0); }
+function drawPlot() {
+  const cv = $("plot"), dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr; const c = cv.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, W, H);
+  const L = 16, R = 16, T = 26, B = 34, x0 = rows.length ? Math.min(xmin(), 0.3) : 0.3;
+  const X = (p) => L + (p - x0) / (1 - x0) * (W - L - R);
+  const th = parseFloat($("th").value);
+  const css = getComputedStyle(document.documentElement), col = (n) => css.getPropertyValue(n).trim();
+  // 축
+  c.strokeStyle = col("--line"); c.fillStyle = col("--mute"); c.font = "12px 'IBM Plex Sans KR', sans-serif"; c.textAlign = "center";
+  for (let t = Math.ceil(x0 * 10) / 10; t <= 1.0001; t += 0.1) { const x = X(t); c.beginPath(); c.moveTo(x, T); c.lineTo(x, H - B); c.stroke(); c.fillText(t.toFixed(1), x, H - B + 16); }
+  c.fillText("모델이 낸 가장 높은 확률", W / 2, H - 4);
+  const midY = T + (H - T - B) * 0.62;
+  c.textAlign = "left"; c.fillText("맞은 사진", L + 4, T + 12); c.fillText("틀린 사진", L + 4, midY + 16);
+  c.strokeStyle = col("--line"); c.setLineDash([4, 4]); c.beginPath(); c.moveTo(L, midY); c.lineTo(W - R, midY); c.stroke(); c.setLineDash([]);
+  // 기준값 아래 영역
+  c.fillStyle = "rgba(138,148,163,0.22)"; c.fillRect(L, T, Math.max(0, X(th) - L), H - T - B);
+  // 점
+  pts = [];
+  const lane = (ok) => ok ? [T + 22, midY - 10] : [midY + 26, H - B - 10];
+  rows.forEach((r, i) => {
+    const [a, b] = lane(r.ok); const h = ((i * 2654435761) >>> 0) / 4294967296;      // 사진마다 고정된 세로 자리
+    const x = X(Math.max(x0, r.pmax)), y = a + h * (b - a);
+    const answered = r.pmax >= th;
+    c.beginPath(); c.arc(x, y, 5.5, 0, Math.PI * 2);
+    c.fillStyle = !answered ? col("--unsure") : (r.ok ? col("--ok") : col("--bad")); c.globalAlpha = answered ? 0.9 : 0.55; c.fill(); c.globalAlpha = 1;
+    if (!r.ok) { c.lineWidth = 1.5; c.strokeStyle = col("--bad"); c.stroke(); }
+    pts.push({ x, y, r });
+  });
+  // 기준선
+  const tx = X(th); c.strokeStyle = col("--bar"); c.lineWidth = 3; c.beginPath(); c.moveTo(tx, T - 8); c.lineTo(tx, H - B); c.stroke();
+  c.fillStyle = col("--bar"); c.beginPath(); c.arc(tx, T - 8, 7, 0, Math.PI * 2); c.fill();
+  c.fillStyle = col("--ink"); c.font = "600 12.5px 'IBM Plex Sans KR', sans-serif"; c.textAlign = tx > W / 2 ? "right" : "left";
+  c.fillText(rows.length ? "여기 아래는 잘 모르겠어요" : "사진을 넣으면 점이 찍힙니다", tx + (tx > W / 2 ? -12 : 12), T - 4);
+  cv._X = X; cv._inv = (px) => x0 + (px - L) / (W - L - R) * (1 - x0);
+}
+function setTh(v) { v = Math.min(0.99, Math.max(0.30, Math.round(v * 100) / 100)); $("th").value = v.toFixed(2); $("thval").textContent = v.toFixed(2); renderAll(); }
+$("th").addEventListener("input", () => { $("thval").textContent = parseFloat($("th").value).toFixed(2); renderAll(); });
+$("target").addEventListener("input", renderAll);
+(() => { const cv = $("plot"); let drag = false;
+  const pos = (ev) => { const r = cv.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+  cv.addEventListener("pointerdown", (ev) => { drag = true; cv.setPointerCapture(ev.pointerId); if (cv._inv) setTh(cv._inv(pos(ev)[0])); });
+  cv.addEventListener("pointermove", (ev) => {
+    const [x, y] = pos(ev);
+    if (drag && cv._inv) { setTh(cv._inv(x)); return; }
+    let best = null, bd = 144; pts.forEach(p => { const d = (p.x - x) ** 2 + (p.y - y) ** 2; if (d < bd) { bd = d; best = p; } });
+    const tip = $("tip");
+    if (!best) { tip.style.display = "none"; return; }
+    tip.innerHTML = (best.r.thumb ? "<img alt=\"\" src=\"" + best.r.thumb + "\">" : "") + best.r.name + "<br>" + best.r.truth + " → " + best.r.pred + " " + best.r.pmax.toFixed(2);
+    tip.style.display = "block"; tip.style.left = Math.min(x + 12, cv.clientWidth - 200) + "px"; tip.style.top = Math.max(0, y - 40) + "px";
+  });
+  const end = () => { drag = false; }; cv.addEventListener("pointerup", end); cv.addEventListener("pointercancel", end);
+  cv.addEventListener("pointerleave", () => { $("tip").style.display = "none"; });
+  window.addEventListener("resize", drawPlot);
+})();
+
+// ---------- 내려받기 ----------
+$("csv").addEventListener("click", () => {
+  let s = "﻿기준값,답한사진,답한비율,맞은사진,정확도,틀린답,모르겠어요,그중맞았을\n";
+  GRID.forEach(t => { const x = statAt(t); s += [t.toFixed(2), x.answered, x.cov.toFixed(4), x.ok, x.acc === null ? "" : x.acc.toFixed(4), x.wrong, x.unsure, x.lost].join(",") + "\n"; });
+  s += "\n파일,정답,판정,최대확률,맞음\n";
+  rows.forEach(r => { s += [r.name, r.truth, r.pred, r.pmax.toFixed(4), r.ok ? 1 : 0].join(",") + "\n"; });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([s], { type: "text/csv" })); a.download = "threshold_table.csv"; a.click();
+});
+$("png").addEventListener("click", () => { const a = document.createElement("a"); a.href = $("plot").toDataURL("image/png"); a.download = "threshold_plot_" + parseFloat($("th").value).toFixed(2) + ".png"; a.click(); });
+
+drawPlot();
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawPlot);
+</script>
+</body>
+</html>

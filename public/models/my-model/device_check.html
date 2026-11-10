@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>교실 기기 점검</title>
+<!-- 그래픽스개론 11주차. 교실 태블릿이나 크롬북에서 학생용 화면이 돌아갈 조건을 미리 확인하는 화면.
+     외부 라이브러리 없음. 카메라 영상은 이 화면에만 보이고 저장하거나 보내지 않는다. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#EEF1F5; --card:#FFFFFF; --ink:#10233F; --navy:#0B3A75; --line:#D5DCE6; --mute:#5C6B80;
+          --ok:#0E8A7B; --bad:#D1345B; --unsure:#8A94A3; --bar:#F2B90F; --soft:#F6F8FB; }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"IBM Plex Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif; font-size:15px; line-height:1.6; }
+  a { color:var(--navy); }
+  .top { background:var(--navy); color:#fff; padding:18px 24px 16px; }
+  .top .in { max-width:1180px; margin:0 auto; display:flex; gap:18px; align-items:baseline; flex-wrap:wrap; }
+  .top h1 { margin:0; font-size:22px; font-weight:700; letter-spacing:-0.01em; }
+  .top p { margin:0; font-size:13.5px; opacity:.88; flex:1 1 420px; }
+  .top a { color:#fff; font-size:13px; opacity:.85; }
+  main { max-width:1180px; margin:20px auto 48px; padding:0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px; }
+  h2 { font-size:16px; margin:0 0 10px; font-weight:700; color:var(--navy); }
+  h3 { font-size:14px; margin:14px 0 6px; font-weight:700; }
+  label { display:block; font-size:13px; margin:10px 0 4px; font-weight:600; }
+  .note { font-size:13px; color:var(--mute); margin:6px 0 0; }
+  .status { font-size:13.5px; padding:8px 10px; background:var(--soft); border-left:4px solid var(--navy); border-radius:4px; margin:8px 0; }
+  .warn { background:#FFF7DB; border:1px solid #E0A800; border-radius:6px; padding:8px 10px; font-size:13px; margin-top:8px; }
+  .warn:empty { display:none; }
+  [hidden] { display:none !important; }   /* display 를 따로 준 요소도 hidden 이면 확실히 감춤 */
+  button, .btn { font:inherit; font-size:14px; font-weight:600; padding:8px 14px; border-radius:7px; border:1px solid var(--navy); background:var(--navy); color:#fff; cursor:pointer; }
+  button.ghost { background:#fff; color:var(--navy); }
+  button:disabled { background:#B8C2D0; border-color:#B8C2D0; color:#fff; cursor:default; }
+  button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline:3px solid var(--bar); outline-offset:2px; }
+  input[type=file] { font-size:13.5px; max-width:100%; }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; font-variant-numeric:tabular-nums; }
+  th, td { border-bottom:1px solid var(--line); padding:6px 8px; text-align:right; }
+  th { background:var(--soft); font-weight:600; text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; animation:none !important; } }
+
+  .layout { display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+  .checks { list-style:none; margin:0; padding:0; }
+  .checks li { display:grid; grid-template-columns: 26px 1fr; gap:8px; padding:9px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .checks li:last-child { border-bottom:0; }
+  .mark { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-size:13px; font-weight:700; margin-top:1px; }
+  .mark.ok { background:var(--ok); } .mark.bad { background:var(--bad); } .mark.q { background:var(--unsure); }
+  .checks b { display:block; } .checks span.d { color:var(--mute); font-size:13px; }
+  video, #snap { width:100%; max-width:420px; aspect-ratio:4/3; background:#0d1b2f; border-radius:10px; display:block; object-fit:cover; }
+  #snap { margin-top:8px; }
+  #snap[hidden] { display:none; }
+  textarea { width:100%; min-height:150px; font:13px/1.5 "IBM Plex Sans KR","Malgun Gothic",sans-serif; padding:8px; border:1px solid var(--line); border-radius:8px; }
+</style>
+</head>
+<body>
+<div class="top"><div class="in">
+  <h1>교실 기기 점검</h1>
+  <p>학생이 쓸 기기에서 이 화면을 열어 보세요. 주소, 카메라, 화면 크기를 확인하고 결과를 활동지에 옮겨 적습니다.</p>
+  <a href="./week11.html">11주차 실습실</a>
+</div></div>
+<main>
+  <div class="layout">
+    <section class="card">
+      <h2>자동으로 확인한 것</h2>
+      <ul class="checks" id="auto"></ul>
+      <p class="note">이 화면을 내려받아 더블 클릭으로 열었다면 주소 항목은 참고만 하세요. 학생은 배포 주소로 들어오므로, 자기 저장소에 이 파일을 올려 배포 주소 뒤에 /device_check.html 을 붙여 여는 것이 실제와 같은 조건입니다.</p>
+    </section>
+    <section class="card">
+      <h2>카메라 켜 보기</h2>
+      <div class="row">
+        <button id="back">뒤 카메라 켜기</button>
+        <button id="front" class="ghost">앞 카메라 켜기</button>
+        <button id="shot" class="ghost" disabled>한 장 찍기</button>
+        <button id="stop" class="ghost" disabled>끄기</button>
+      </div>
+      <div class="status" id="camstatus">아직 카메라를 켜지 않았습니다. 버튼을 누르면 브라우저가 허용 여부를 묻습니다.</div>
+      <video id="video" playsinline muted autoplay></video>
+      <canvas id="snap" hidden></canvas>
+      <ul class="checks" id="camchecks"></ul>
+    </section>
+  </div>
+  <section class="card" style="margin-top:16px">
+    <h2>점검 결과</h2>
+    <p class="note" style="margin-top:0">아래 글을 복사해 활동지 기기 점검표에 붙이세요. 기기마다 한 번씩 합니다.</p>
+    <textarea id="report" readonly></textarea>
+    <div class="row" style="margin-top:8px"><button id="copy">결과 복사</button><span class="note" id="copied" style="margin:0"></span></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const R = { auto: [], cam: [] };
+let stream = null;
+function li(ul, state, title, desc) {
+  const el = document.createElement("li");
+  el.innerHTML = "<span class=\"mark " + state + "\">" + (state === "ok" ? "✓" : state === "bad" ? "!" : "?") + "</span><div><b></b><span class=\"d\"></span></div>";
+  el.querySelector("b").textContent = title; el.querySelector(".d").textContent = desc; ul.appendChild(el);
+}
+function report() {
+  const lines = ["[기기 점검] " + new Date().toLocaleString("ko-KR"), "주소: " + location.href.split("?")[0]];
+  R.auto.forEach(x => lines.push((x.s === "ok" ? "O " : x.s === "bad" ? "X " : "? ") + x.t + " / " + x.d));
+  R.cam.forEach(x => lines.push((x.s === "ok" ? "O " : x.s === "bad" ? "X " : "? ") + x.t + " / " + x.d));
+  $("report").value = lines.join("\n");
+}
+function add(group, s, t, d) { R[group].push({ s, t, d }); li($(group === "auto" ? "auto" : "camchecks"), s, t, d); report(); }
+
+// ---------- 자동 점검 ----------
+(async () => {
+  const proto = location.protocol;
+  if (proto === "https:") add("auto", "ok", "주소가 https 로 시작함", "카메라를 쓸 수 있는 주소입니다.");
+  else if (proto === "file:") add("auto", "q", "파일을 직접 연 상태", "이 기기에서는 카메라가 켜질 수 있지만 학생이 쓸 조건과 다릅니다. 배포 주소로도 확인하세요.");
+  else if (location.hostname === "localhost" || location.hostname === "127.0.0.1") add("auto", "q", "내 컴퓨터 주소(localhost)", "내 컴퓨터에서만 열립니다. 학생에게 줄 주소가 아닙니다.");
+  else add("auto", "bad", "주소가 http 로 시작함", "https 가 아니면 브라우저가 카메라를 막습니다. Vercel 이나 GitHub Pages 주소는 https 입니다.");
+
+  const md = navigator.mediaDevices;
+  if (md && md.getUserMedia) add("auto", "ok", "브라우저가 카메라 기능을 지원함", "");
+  else add("auto", "bad", "카메라 기능을 쓸 수 없음", "주소가 https 가 아니거나 브라우저가 오래되었습니다. 사진 올리기만 쓸 수 있습니다.");
+  if (md && md.enumerateDevices) {
+    try { const n = (await md.enumerateDevices()).filter(d => d.kind === "videoinput").length;
+      add("auto", n ? "ok" : "bad", "카메라 " + n + "대", n ? (n >= 2 ? "앞뒤 카메라가 있는 기기로 보입니다." : "카메라가 한 대입니다. 크롬북이나 노트북이면 앞 카메라일 가능성이 큽니다.") : "카메라가 없습니다. 사진 올리기로 써야 합니다."); } catch (e) { }
+  }
+  const w = window.innerWidth, h = window.innerHeight;
+  add("auto", w >= 360 ? "ok" : "q", "화면 " + w + " × " + h + " (" + (w > h ? "가로" : "세로") + ")", w < 600 ? "휴대폰 크기입니다. 글자와 버튼이 한 손으로 누를 만한지 보세요." : "태블릿이나 노트북 크기입니다.");
+  add("auto", "ok", (navigator.maxTouchPoints > 0 ? "터치 화면" : "터치 없음 (마우스나 터치패드)"), navigator.maxTouchPoints > 0 ? "버튼이 손가락으로 누르기에 충분히 큰지 보세요." : "크롬북이면 터치패드로 누르게 됩니다.");
+  add("auto", navigator.onLine ? "ok" : "bad", navigator.onLine ? "인터넷 연결됨" : "인터넷 연결 안 됨", "모델을 처음 불러올 때 인터넷이 필요합니다. 학교 와이파이에서 한 번 더 확인하세요.");
+  const ua = navigator.userAgent;
+  const br = /CrOS/.test(ua) ? "크롬북" : /iPad|iPhone/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? "아이패드·아이폰" : /Android/.test(ua) ? "안드로이드" : /Windows/.test(ua) ? "윈도우" : /Macintosh/.test(ua) ? "맥" : /Linux/.test(ua) ? "리눅스" : "기타";
+  const bn = /Edg\//.test(ua) ? "엣지" : /Whale/.test(ua) ? "웨일" : /SamsungBrowser/.test(ua) ? "삼성 인터넷" : /Chrome\//.test(ua) ? "크롬" : /Safari\//.test(ua) ? "사파리" : /Firefox\//.test(ua) ? "파이어폭스" : "기타 브라우저";
+  add("auto", "ok", "기기 " + br + ", 브라우저 " + bn, "");
+})();
+
+// ---------- 카메라 ----------
+function stopCam() { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; $("video").srcObject = null; $("shot").disabled = true; $("stop").disabled = true; }
+async function startCam(facing) {
+  stopCam();
+  const name = facing === "environment" ? "뒤 카메라" : "앞 카메라";
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $("camstatus").textContent = "이 주소나 브라우저에서는 카메라를 쓸 수 없습니다."; add("cam", "bad", name + " 실패", "카메라 기능 없음"); return; }
+  try {
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: facing } }, audio: false }); }
+    catch (e) { if (e.name !== "OverconstrainedError" && e.name !== "NotFoundError") throw e;
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });       // 그 방향 카메라가 없으면 있는 카메라로
+      add("cam", "q", name + " 없음", "이 기기에는 그 방향 카메라가 없어 있는 카메라로 켰습니다."); }
+    const v = $("video"); v.srcObject = stream; await v.play().catch(() => { });
+    const st = stream.getVideoTracks()[0].getSettings();
+    $("camstatus").textContent = name + "를 켰습니다. 영상이 보이면 정상입니다.";
+    add("cam", "ok", name + " 켜짐", (st.width || "?") + " × " + (st.height || "?") + (st.facingMode ? ", 방향 " + st.facingMode : ""));
+    $("shot").disabled = false; $("stop").disabled = false;
+  } catch (e) {
+    const why = e.name === "NotAllowedError" ? "카메라 사용이 거부되었습니다. 주소창 왼쪽 자물쇠(또는 설정 아이콘)에서 카메라를 '허용'으로 바꾸고 새로 고침하세요. 학교 관리 기기는 관리자 설정으로 막혀 있을 수 있습니다."
+      : e.name === "NotFoundError" ? "카메라를 찾지 못했습니다."
+      : e.name === "NotReadableError" ? "카메라를 읽지 못했습니다. 다른 앱(줌, 카메라 앱)이 카메라를 쓰고 있을 때 자주 생깁니다. 그 앱을 닫고 다시 누르세요."
+      : "카메라를 켜지 못했습니다 (" + e.name + ").";
+    $("camstatus").textContent = why; add("cam", "bad", name + " 실패", why);
+  }
+}
+$("back").addEventListener("click", () => startCam("environment"));
+$("front").addEventListener("click", () => startCam("user"));
+$("stop").addEventListener("click", () => { stopCam(); $("camstatus").textContent = "카메라를 껐습니다."; });
+$("shot").addEventListener("click", () => {
+  const v = $("video"), c = $("snap"); if (!v.videoWidth) return;
+  c.width = v.videoWidth; c.height = v.videoHeight; c.getContext("2d").drawImage(v, 0, 0); c.hidden = false;
+  add("cam", "ok", "한 장 찍기 됨", v.videoWidth + " × " + v.videoHeight + ". 찍힌 그림이 흐리거나 어두우면 교실 조명과 거리를 바꿔 보세요.");
+});
+$("copy").addEventListener("click", async () => {
+  const t = $("report"); t.select();
+  try { await navigator.clipboard.writeText(t.value); $("copied").textContent = "복사했습니다."; }
+  catch (e) { try { document.execCommand("copy"); $("copied").textContent = "복사했습니다."; } catch (e2) { $("copied").textContent = "글을 직접 선택해 복사하세요."; } }
+});
+</script>
+</body>
+</html>

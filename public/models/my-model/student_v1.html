@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>학생용 화면 v1 틀</title>
+<!-- 그래픽스개론 11주차. 학생용 화면 v1 틀.
+     아래 CONFIG 만 내 프로젝트에 맞게 고치면 된다. 고칠 곳은 네 가지: 제목, 학년군, 기준값, 클래스별 문구.
+     사진은 브라우저 안에서만 처리하고 저장하거나 외부로 보내지 않는다. 로그인, 이름 입력, 점수 저장을 넣지 않는다. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+<script>
+// ================= 여기만 고치세요 =================
+const CONFIG = {
+  title: "분리배출 도우미",
+  grade: "mid",          // "low" 1~2학년, "mid" 3~4학년, "high" 5~6학년
+  threshold: 0.70,       // 기준값 실험기에서 정한 값. 가장 높은 확률이 이보다 낮으면 '잘 모르겠어요'
+  classes: {             // 모델의 클래스 이름(글자 그대로) → 학생에게 보여 줄 말
+    "plastic": { say: "플라스틱 같아요", icon: "🧴", hint: "라벨을 떼고 헹궈서 버려요." },
+    "can":     { say: "캔 같아요",       icon: "🥫", hint: "속을 비우고 헹궈서 버려요." },
+    "paper":   { say: "종이 같아요",     icon: "📄", hint: "테이프를 떼고 펴서 버려요." }
+  },
+  unsure: {
+    say: "잘 모르겠어요",
+    tips: ["물건을 화면 가운데에 크게 놓아요", "밝은 곳에서 찍어요", "한 번에 하나만 보여 줘요"]
+  },
+  notice: "AI는 틀릴 수 있어요. 헷갈리면 선생님께 물어봐요.",
+  question: "AI는 사진의 무엇을 보고 이렇게 생각했을까요? 단서를 찾아 말해 봐요."   // 5~6학년 화면에만 나옴
+};
+// ===================================================
+</script>
+<style>
+  :root { --ink:#10233F; --navy:#0B3A75; --ok:#0E8A7B; --unsure:#6E7A8C; --bar:#F2B90F; --bg:#EAF0F7; --line:#CBD5E3; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"IBM Plex Sans KR","Malgun Gothic","Apple SD Gothic Neo",sans-serif; }
+  .app { max-width:520px; margin:0 auto; min-height:100vh; padding:16px 16px calc(24px + env(safe-area-inset-bottom)); display:flex; flex-direction:column; gap:14px; }
+  h1 { font-size:26px; margin:6px 0 0; letter-spacing:-0.02em; }
+  [hidden] { display:none !important; }   /* display 를 따로 준 요소도 hidden 이면 확실히 감춤 */
+  .frame { position:relative; background:#0d1b2f; border-radius:22px; overflow:hidden; aspect-ratio:1; }
+  .frame video, .frame canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .frame .empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#c9d6e8; font-size:17px; text-align:center; padding:24px; line-height:1.6; }
+  .btns { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  button, .filebtn { font:inherit; font-size:18px; font-weight:700; min-height:56px; border-radius:16px; border:2px solid var(--navy); background:var(--navy); color:#fff; cursor:pointer;
+                     display:flex; align-items:center; justify-content:center; text-align:center; padding:8px 12px; }
+  button.shot { grid-column:1 / span 2; background:var(--bar); border-color:var(--bar); color:#2b2100; font-size:21px; }
+  button.light, .filebtn { background:#fff; color:var(--navy); }
+  button:disabled { opacity:.45; cursor:default; }
+  button:focus-visible, .filebtn:focus-within { outline:4px solid var(--bar); outline-offset:2px; }
+  .filebtn input { position:absolute; opacity:0; width:1px; height:1px; }
+  .result { background:#fff; border-radius:22px; padding:18px 18px 16px; border:2px solid var(--line); }
+  .result.know { border-color:var(--ok); } .result.unsure { border-color:var(--unsure); }
+  .say { display:flex; align-items:center; gap:14px; }
+  .say .icon { font-size:52px; line-height:1; }
+  .say b { font-size:28px; line-height:1.25; letter-spacing:-0.02em; }
+  .hint { font-size:18px; margin:10px 0 0; line-height:1.55; }
+  ul.tips { margin:10px 0 0; padding-left:22px; font-size:18px; line-height:1.7; }
+  .bars { margin-top:14px; display:grid; gap:8px; }
+  .barrow { display:grid; grid-template-columns:5.5em 1fr 3.2em; gap:8px; align-items:center; font-size:15px; }
+  .track { height:14px; background:#E3E9F1; border-radius:7px; overflow:hidden; }
+  .fill { height:100%; background:var(--navy); border-radius:7px; }
+  .barrow.top .fill { background:var(--ok); }
+  .q { margin-top:14px; padding:12px 14px; background:#F3F6FA; border-radius:14px; font-size:16.5px; line-height:1.55; }
+  .notice { font-size:15px; color:#42526a; text-align:center; line-height:1.5; }
+  details { font-size:14px; color:#42526a; background:#fff; border-radius:14px; padding:10px 14px; }
+  details summary { cursor:pointer; font-weight:600; }
+  details input { font-size:14px; margin-top:8px; max-width:100%; }
+  #msg { font-size:14.5px; margin:6px 0 0; }
+  body.low .say b { font-size:34px; } body.low .say .icon { font-size:72px; } body.low .hint { font-size:21px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1 id="title"></h1>
+
+  <div class="frame" aria-label="사진 화면">
+    <video id="video" playsinline muted autoplay hidden></video>
+    <canvas id="still" hidden></canvas>
+    <div class="empty" id="empty">카메라를 켜거나<br>사진을 골라 주세요</div>
+  </div>
+
+  <div class="btns">
+    <button id="cam" disabled>카메라 켜기</button>
+    <label class="filebtn" id="pickwrap">사진 고르기<input type="file" id="pick" accept="image/*" disabled></label>
+    <button id="shot" class="shot" hidden>찰칵! 확인하기</button>
+  </div>
+
+  <div class="result" id="result" hidden aria-live="polite"></div>
+  <p class="notice" id="notice"></p>
+
+  <details id="teacher">
+    <summary>선생님용. 모델과 설정</summary>
+    <p id="msg">모델을 찾는 중입니다...</p>
+    <label>모델 파일 3개 고르기 (model.json, metadata.json, weights.bin)<br><input type="file" id="mfiles" accept=".json,.bin" multiple></label>
+    <p id="cfg"></p>
+  </details>
+</div>
+<script>
+// ===== 티처블 머신 모델 불러오기 (이미지 프로젝트와 포즈 프로젝트 모두) =====
+// 1) 이 화면과 같은 주소 아래에서 모델 폴더를 찾고 2) 없으면 파일 3개를 직접 고르게 한다. 파일은 브라우저 밖으로 나가지 않는다.
+const TM = { model: null, kind: null, labels: [] };
+const TM_BASES = ["./", "./my_model/", "./model/", "./models/", "./tm_model/", "./my-model/", "./public/", "./assets/", "./static/"];
+function tmNormBase(b) { b = b.trim().replace(/model\.json$/, "").replace(/metadata\.json$/, ""); if (!b) return "./"; if (!b.endsWith("/")) b += "/"; return b; }
+async function tmBasesFromIndex() {
+  const found = [];
+  try {
+    const r = await fetch("./index.html", { cache: "no-store" }); if (!r.ok) return found;
+    const html = await r.text();
+    for (const m of html.matchAll(/(?:URL|url|modelURL|MODEL_URL|modelUrl|modelPath|MODEL_PATH|base|BASE)\s*=\s*["'`]([^"'`]{1,300}?)["'`]/g)) found.push(tmNormBase(m[1]));
+    for (const m of html.matchAll(/["'`]([^"'`\s]{0,300}\/)(?:model|metadata)\.json["'`]/g)) found.push(tmNormBase(m[1]));
+  } catch (e) { }
+  return found;
+}
+async function tmFindBase(tried) {
+  const bases = [];
+  for (const b of [...await tmBasesFromIndex(), ...TM_BASES]) if (!bases.includes(b)) bases.push(b);
+  for (const b of bases) {
+    tried.push(b);
+    try { const r = await fetch(b + "metadata.json", { cache: "no-store" }); if (!r.ok) continue; const j = await r.json(); if (j && Array.isArray(j.labels)) return { base: b, meta: j }; } catch (e) { }
+  }
+  return null;
+}
+function tmKindOf(meta) { return /pose/i.test((meta && meta.packageName) || "") ? "pose" : "image"; }
+function tmFinish(model, kind) {
+  // 메타데이터에 종류가 없을 때를 대비해 입력 모양으로 한 번 더 확인 ([224,224,3] 이면 이미지, [14739] 같은 한 줄이면 포즈)
+  const shp = (model.model && model.model.inputs && model.model.inputs[0]) ? model.model.inputs[0].shape : null;
+  if (shp && shp.length === 4) kind = "image";
+  if (shp && shp.length === 2) kind = "pose";
+  TM.model = model; TM.kind = kind; TM.labels = model.getClassLabels();
+}
+function tmLib(kind) {
+  if (kind === "pose") { if (typeof tmPose === "undefined") throw new Error("포즈 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요."); return tmPose; }
+  if (typeof tmImage === "undefined") throw new Error("이미지 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하세요.");
+  return tmImage;
+}
+async function tmLoadAuto() {            // 반환: {ok, how, tried}
+  const tried = [];
+  if (location.protocol === "file:") return { ok: false, local: true, tried };
+  const hit = await tmFindBase(tried);
+  if (!hit) return { ok: false, tried };
+  const kind = tmKindOf(hit.meta);
+  const m = await tmLib(kind).load(hit.base + "model.json", hit.base + "metadata.json");
+  tmFinish(m, kind);
+  return { ok: true, how: hit.base === "./" ? "같은 폴더" : hit.base, tried };
+}
+async function tmLoadFiles(fileList) {
+  const fs = Array.from(fileList);
+  const pick = (test) => fs.find(f => test(f.name.toLowerCase()));
+  const mj = pick(n => n === "model.json" || (n.endsWith(".json") && n.includes("model")));
+  const md = pick(n => n === "metadata.json" || (n.endsWith(".json") && n.includes("meta")));
+  const wb = pick(n => n.endsWith(".bin"));
+  if (!mj || !md || !wb) throw new Error("세 파일(model.json, metadata.json, weights.bin)을 한꺼번에 골라야 합니다. 지금 고른 것: " + fs.map(f => f.name).join(", "));
+  let meta = {}; try { meta = JSON.parse(await md.text()); } catch (e) { }
+  const kind = tmKindOf(meta);
+  const m = await tmLib(kind).loadFromFiles(mj, wb, md);
+  tmFinish(m, kind);
+}
+async function tmPredict(el) {            // 반환: 클래스 순서대로 확률 배열
+  let pred;
+  if (TM.kind === "pose") { const r = await TM.model.estimatePose(el, false); pred = await TM.model.predict(r.posenetOutput); }
+  else pred = await TM.model.predict(el);
+  return pred.map(p => p.probability);
+}
+
+
+const $ = (id) => document.getElementById(id);
+// 주소 뒤에 ?grade=low 나 ?th=0.8 을 붙이면 미리보기용으로 잠깐 바꿔 볼 수 있다 (코드의 CONFIG 는 그대로)
+const qs = new URLSearchParams(location.search);
+const GRADE = ["low", "mid", "high"].includes(qs.get("grade")) ? qs.get("grade") : CONFIG.grade;
+const TH = parseFloat(qs.get("th")) > 0 ? parseFloat(qs.get("th")) : CONFIG.threshold;
+document.body.classList.add(GRADE);
+$("title").textContent = CONFIG.title; document.title = CONFIG.title;
+$("notice").textContent = CONFIG.notice;
+let stream = null;
+
+function ready(how) {
+  $("msg").textContent = "모델을 불러왔습니다 (" + how + "). 클래스: " + TM.labels.join(", ");
+  const missing = TM.labels.filter(l => !CONFIG.classes[l]);
+  $("cfg").textContent = "학년군 " + GRADE + ", 기준값 " + TH.toFixed(2) + (missing.length ? ". CONFIG 에 문구가 없는 클래스: " + missing.join(", ") + " (이름 그대로 보여 줌)" : ". 모든 클래스에 문구가 있습니다.");
+  $("cam").disabled = false; $("pick").disabled = false;
+}
+(async () => {
+  try {
+    const r = await tmLoadAuto();
+    if (r.ok) ready(r.how);
+    else { $("msg").textContent = r.local ? "파일을 직접 열었습니다. 아래에서 모델 파일 3개를 고르세요." : "이 주소 아래에서 모델을 찾지 못했습니다. 아래에서 세 파일을 고르세요."; $("teacher").open = true; }
+  } catch (e) { $("msg").textContent = "모델을 읽지 못했습니다. " + e.message; $("teacher").open = true; }
+})();
+$("mfiles").addEventListener("change", async (ev) => {
+  try { $("msg").textContent = "모델을 읽는 중..."; await tmLoadFiles(ev.target.files); ready("고른 파일"); }
+  catch (e) { $("msg").textContent = "모델을 읽지 못했습니다. " + e.message; }
+});
+
+// ---------- 카메라 ----------
+$("cam").addEventListener("click", async () => {
+  if (stream) { stopCam(); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { say("이 주소에서는 카메라를 쓸 수 없어요. 사진 고르기를 눌러 주세요.", true); return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });   // 뒤 카메라를 먼저 찾고, 없으면 있는 카메라
+    const v = $("video"); v.srcObject = stream; v.hidden = false; $("still").hidden = true; $("empty").hidden = true;
+    $("shot").hidden = false; $("cam").textContent = "카메라 끄기"; $("result").hidden = true;
+  } catch (e) {
+    say(e.name === "NotAllowedError" ? "카메라를 쓸 수 없어요. 주소창의 자물쇠를 눌러 카메라를 허용하거나, 사진 고르기를 눌러 주세요."
+      : e.name === "NotFoundError" ? "카메라를 찾지 못했어요. 사진 고르기를 눌러 주세요." : "카메라를 켜지 못했어요. 사진 고르기를 눌러 주세요.", true);
+  }
+});
+function stopCam() { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; $("video").hidden = true; $("shot").hidden = true; $("cam").textContent = "카메라 켜기"; }
+$("shot").addEventListener("click", async () => {
+  const v = $("video"), c = $("still"); const s = Math.min(v.videoWidth, v.videoHeight); if (!s) return;
+  c.width = 480; c.height = 480; c.getContext("2d").drawImage(v, (v.videoWidth - s) / 2, (v.videoHeight - s) / 2, s, s, 0, 0, 480, 480);   // 화면에 보이는 가운데 정사각형만
+  stopCam(); c.hidden = false; await judge(c);
+});
+$("pick").addEventListener("change", (ev) => {
+  const f = ev.target.files[0]; if (!f) return;
+  const im = new Image();
+  im.onload = async () => {
+    stopCam(); const c = $("still"), s = Math.min(im.width, im.height);
+    c.width = 480; c.height = 480; c.getContext("2d").drawImage(im, (im.width - s) / 2, (im.height - s) / 2, s, s, 0, 0, 480, 480);
+    URL.revokeObjectURL(im.src); c.hidden = false; $("empty").hidden = true; await judge(c);
+  };
+  im.src = URL.createObjectURL(f); ev.target.value = "";
+});
+
+// ---------- 판정과 문구 ----------
+function say(text, plain) { const r = $("result"); r.hidden = false; r.className = "result" + (plain ? "" : " unsure"); r.innerHTML = "<p class=\"hint\" style=\"margin:0\"></p>"; r.firstChild.textContent = text; }
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+async function judge(canvas) {
+  if (!TM.model) { say("모델을 아직 못 불러왔어요. 선생님께 알려 주세요.", true); return; }
+  let p;
+  try { p = await tmPredict(canvas); } catch (e) { say("사진을 읽지 못했어요. 다시 찍어 볼까요?", true); return; }
+  const order = p.map((v, i) => i).sort((a, b) => p[b] - p[a]);
+  const top = order[0], r = $("result"); r.hidden = false;
+  // 기준값보다 낮으면 답하지 않는다
+  if (p[top] < TH) {
+    r.className = "result unsure";
+    r.innerHTML = "<div class=\"say\"><span class=\"icon\">🤔</span><b>" + esc(CONFIG.unsure.say) + "</b></div><ul class=\"tips\">" + CONFIG.unsure.tips.map(t => "<li>" + esc(t) + "</li>").join("") + "</ul>";
+  } else {
+    const c = CONFIG.classes[TM.labels[top]] || { say: TM.labels[top] + " 같아요", icon: "🔎", hint: "" };
+    r.className = "result know";
+    r.innerHTML = "<div class=\"say\"><span class=\"icon\">" + c.icon + "</span><b>" + esc(c.say) + "</b></div>" + (c.hint ? "<p class=\"hint\">" + esc(c.hint) + "</p>" : "");
+  }
+  // 학년군에 따라 AI의 생각을 얼마나 보여 줄지
+  if (GRADE !== "low") {
+    let h = "<div class=\"bars\" aria-label=\"AI의 생각\">";
+    order.slice(0, 3).forEach((i, k) => {
+      const name = (CONFIG.classes[TM.labels[i]] ? CONFIG.classes[TM.labels[i]].say.replace(/ 같아요$/, "") : TM.labels[i]);
+      h += "<div class=\"barrow" + (k === 0 ? " top" : "") + "\"><span>" + esc(name) + "</span><div class=\"track\"><div class=\"fill\" style=\"width:" + Math.round(p[i] * 100) + "%\"></div></div><span>" + (GRADE === "high" ? Math.round(p[i] * 100) + "%" : "") + "</span></div>";
+    });
+    h += "</div>";
+    if (GRADE === "high") h += "<div class=\"q\">" + esc(CONFIG.question) + "</div>";
+    r.insertAdjacentHTML("beforeend", h);
+  }
+}
+</script>
+</body>
+</html>
