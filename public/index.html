@@ -75,6 +75,27 @@
     transition: width .5s ease;
   }
   .row.top .label::after { content: " ⭐"; }
+
+  /* 기후 특징 설명 칸 */
+  #climate-info {
+    display: none;
+    margin-top: 20px;
+    padding: 16px 20px 18px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.85);
+    border-left: 8px solid var(--ink);
+    line-height: 1.8;
+    font-size: 1rem;
+  }
+  #climate-info h3 {
+    font-family: "Jua", "Noto Sans KR", sans-serif;
+    font-size: 1.35rem;
+    font-weight: 400;
+    margin: 0 0 8px;
+  }
+  #climate-info ul { margin: 0; padding-left: 20px; }
+  #climate-info li { margin-bottom: 4px; }
+
   @media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
 </style>
 </head>
@@ -97,6 +118,7 @@
   <div id="result">
     <div id="verdict"></div>
     <div id="bars"></div>
+    <div id="climate-info"></div>
   </div>
 </main>
 
@@ -114,11 +136,49 @@
   ];
   const COLORS = { "열대기후": "#f2a33a", "온대기후": "#2e9e6b", "한대기후": "#5aa9e6" };
 
+  // 기후별 특징 설명 (글을 바꾸고 싶으면 아래 문장만 고치면 돼요)
+  const CLIMATE_INFO = {
+    "열대기후": {
+      title: "🌴 열대기후의 특징",
+      color: "#f2a33a",
+      points: [
+        "일 년 내내 날씨가 더워요. (평균 기온 18℃ 이상)",
+        "비가 아주 많이 와요. 갑자기 쏟아지는 소나기 '스콜'도 있어요.",
+        "키가 큰 나무가 빽빽한 열대우림과 야자수, 바나나 나무가 자라요.",
+        "더위와 비를 피하려고 지붕이 뾰족하고 바람이 잘 통하는 집을 지어요.",
+        "동남아시아, 아마존, 아프리카 가운데 지역에서 볼 수 있어요."
+      ]
+    },
+    "온대기후": {
+      title: "🍂 온대기후의 특징",
+      color: "#2e9e6b",
+      points: [
+        "봄·여름·가을·겨울, 사계절이 뚜렷해요.",
+        "너무 덥지도 너무 춥지도 않아서 사람이 살기 좋아요.",
+        "단풍나무처럼 계절에 따라 잎 색이 변하는 나무가 많아요.",
+        "벼, 밀, 과일 농사를 많이 해요.",
+        "우리나라, 일본, 유럽, 미국 동부 등에서 볼 수 있어요."
+      ]
+    },
+    "한대기후": {
+      title: "❄️ 한대기후의 특징",
+      color: "#5aa9e6",
+      points: [
+        "일 년 내내 아주 추워요. 가장 따뜻한 달도 10℃가 안 돼요.",
+        "땅이 꽁꽁 얼어 있어서 큰 나무가 거의 자라지 못해요.",
+        "이끼와 키 작은 풀이 자라요.",
+        "북극곰, 순록, 펭귄처럼 추위에 강한 동물이 살아요.",
+        "북극과 남극 주변, 시베리아 북쪽에서 볼 수 있어요."
+      ]
+    }
+  };
+
   const statusEl = document.getElementById("status");
   const preview = document.getElementById("preview");
   const result = document.getElementById("result");
   const bars = document.getElementById("bars");
   const verdict = document.getElementById("verdict");
+  const infoEl = document.getElementById("climate-info");
   const fileInput = document.getElementById("file");
   let model = null;
 
@@ -147,6 +207,7 @@
     if (!model) { statusEl.textContent = "⏳ 모델을 아직 불러오는 중이에요. 잠시 후 다시 해보세요."; return; }
     statusEl.textContent = "🔍 분석 중...";
     result.style.display = "none";
+    infoEl.style.display = "none";
     preview.onload = predict;
     preview.src = URL.createObjectURL(file);
     preview.style.display = "block";
@@ -170,9 +231,24 @@
       });
     });
     verdict.textContent = "이 사진은 「" + best.className + "」 같아요!";
+
+    // 판단한 기후의 특징 설명 보여주기
+    const info = CLIMATE_INFO[best.className];
+    if (info) {
+      infoEl.style.borderLeftColor = info.color;
+      infoEl.innerHTML =
+        "<h3>" + info.title + "</h3><ul>" +
+        info.points.map((t) => "<li>" + t + "</li>").join("") +
+        "</ul>";
+      infoEl.style.display = "block";
+    } else {
+      infoEl.style.display = "none";
+    }
+
     statusEl.textContent = "";
     result.style.display = "block";
   }
 </script>
 </body>
 </html>
+
