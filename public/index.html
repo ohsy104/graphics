@@ -28,7 +28,20 @@
     justify-content: center;
     padding: 32px 16px 56px;
   }
-  main { width: 100%; max-width: 520px; text-align: center; }
+
+  /* 왼쪽(기존 화면) + 오른쪽(기후 설명) 2단 배치 */
+  .layout {
+    width: 100%;
+    max-width: 1000px;
+    display: grid;
+    grid-template-columns: minmax(0, 520px) minmax(0, 420px);
+    gap: 32px;
+    justify-content: center;
+    align-items: start;
+  }
+  main { width: 100%; text-align: center; }
+  aside { position: sticky; top: 32px; }
+
   h1 {
     font-family: "Jua", "Noto Sans KR", sans-serif;
     font-size: clamp(2rem, 7vw, 2.6rem);
@@ -76,51 +89,77 @@
   }
   .row.top .label::after { content: " ⭐"; }
 
-  /* 기후 특징 설명 칸 */
+  /* 오른쪽 기후 특징 설명 칸 */
   #climate-info {
-    display: none;
-    margin-top: 20px;
-    padding: 16px 20px 18px;
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.85);
+    text-align: left;
+    padding: 22px 24px 24px;
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.88);
     border-left: 8px solid var(--ink);
-    line-height: 1.8;
-    font-size: 1rem;
+    box-shadow: 0 6px 20px rgba(31,58,77,.12);
+    line-height: 1.85;
+    font-size: 1.05rem;
   }
   #climate-info h3 {
     font-family: "Jua", "Noto Sans KR", sans-serif;
-    font-size: 1.35rem;
+    font-size: 1.5rem;
     font-weight: 400;
-    margin: 0 0 8px;
+    margin: 0 0 10px;
   }
-  #climate-info ul { margin: 0; padding-left: 20px; }
-  #climate-info li { margin-bottom: 4px; }
+  #climate-info ul { margin: 0; padding-left: 22px; }
+  #climate-info li { margin-bottom: 6px; }
+
+  /* 사진을 올리기 전 안내 상태 */
+  #climate-info.empty {
+    border-left-color: var(--track);
+    border: 2px dashed #b9c8d2;
+    background: rgba(255, 255, 255, 0.5);
+    box-shadow: none;
+    text-align: center;
+    color: #5d7686;
+  }
+
+  /* 화면이 좁으면(태블릿 세로, 스마트폰) 위아래로 쌓기 */
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: minmax(0, 520px); gap: 20px; }
+    aside { position: static; }
+    #climate-info.empty { display: none; }
+  }
 
   @media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
 </style>
 </head>
 <body>
-<main>
-  <h1>🧭 AI 기후 탐험대</h1>
-  <p class="sub">풍경 사진을 올리면 AI가<br>열대·온대·한대 중 어떤 기후인지 판단해 줘요.</p>
-  <div class="zones">
-    <span class="z-trop">열대기후</span>
-    <span class="z-temp">온대기후</span>
-    <span class="z-cold">한대기후</span>
-  </div>
+<div class="layout">
 
-  <label class="upload-btn" for="file" tabindex="0">📷 사진 업로드하기</label>
-  <input type="file" id="file" accept="image/*">
+  <!-- 왼쪽: 기존 화면 -->
+  <main>
+    <h1>🧭 AI 기후 탐험대</h1>
+    <p class="sub">풍경 사진을 올리면 AI가<br>열대·온대·한대 중 어떤 기후인지 판단해 줘요.</p>
+    <div class="zones">
+      <span class="z-trop">열대기후</span>
+      <span class="z-temp">온대기후</span>
+      <span class="z-cold">한대기후</span>
+    </div>
 
-  <div id="status">⏳ 모델을 불러오는 중이에요...</div>
-  <img id="preview" alt="업로드한 사진">
+    <label class="upload-btn" for="file" tabindex="0">📷 사진 업로드하기</label>
+    <input type="file" id="file" accept="image/*">
 
-  <div id="result">
-    <div id="verdict"></div>
-    <div id="bars"></div>
-    <div id="climate-info"></div>
-  </div>
-</main>
+    <div id="status">⏳ 모델을 불러오는 중이에요...</div>
+    <img id="preview" alt="업로드한 사진">
+
+    <div id="result">
+      <div id="verdict"></div>
+      <div id="bars"></div>
+    </div>
+  </main>
+
+  <!-- 오른쪽: 기후 특징 설명 -->
+  <aside>
+    <div id="climate-info" class="empty"></div>
+  </aside>
+
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
@@ -182,6 +221,16 @@
   const fileInput = document.getElementById("file");
   let model = null;
 
+  // 사진을 올리기 전(또는 새 사진 분석 중)에 보이는 안내 문구
+  function showInfoPlaceholder() {
+    infoEl.className = "empty";
+    infoEl.style.borderLeftColor = "";
+    infoEl.innerHTML =
+      "<h3>🔎 기후 특징</h3>" +
+      "<p style='margin:0'>사진을 올리면 AI가 판단한<br>기후의 특징이 여기에 나와요.</p>";
+  }
+  showInfoPlaceholder();
+
   async function init() {
     for (const base of BASES) {
       try {
@@ -207,7 +256,7 @@
     if (!model) { statusEl.textContent = "⏳ 모델을 아직 불러오는 중이에요. 잠시 후 다시 해보세요."; return; }
     statusEl.textContent = "🔍 분석 중...";
     result.style.display = "none";
-    infoEl.style.display = "none";
+    showInfoPlaceholder();
     preview.onload = predict;
     preview.src = URL.createObjectURL(file);
     preview.style.display = "block";
@@ -232,17 +281,17 @@
     });
     verdict.textContent = "이 사진은 「" + best.className + "」 같아요!";
 
-    // 판단한 기후의 특징 설명 보여주기
+    // 오른쪽 칸에 판단한 기후의 특징 보여주기
     const info = CLIMATE_INFO[best.className];
     if (info) {
+      infoEl.className = "";
       infoEl.style.borderLeftColor = info.color;
       infoEl.innerHTML =
         "<h3>" + info.title + "</h3><ul>" +
         info.points.map((t) => "<li>" + t + "</li>").join("") +
         "</ul>";
-      infoEl.style.display = "block";
     } else {
-      infoEl.style.display = "none";
+      showInfoPlaceholder();
     }
 
     statusEl.textContent = "";
@@ -251,4 +300,3 @@
 </script>
 </body>
 </html>
-
