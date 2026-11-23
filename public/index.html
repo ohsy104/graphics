@@ -16,6 +16,7 @@
     --sun: #f2a33a;
     --ice: #5aa9e6;
     --track: #e3e8ec;
+    --unsure: #7a6f9b;
   }
   * { box-sizing: border-box; }
   body {
@@ -77,6 +78,11 @@
   #result { display: none; text-align: left; max-width: 440px; margin: 16px auto 0; }
   #verdict {
     text-align: center; font-family: "Jua", sans-serif; font-size: 1.5rem; margin-bottom: 14px;
+  }
+  #verdict.unsure { color: var(--unsure); }
+  #verdict small {
+    display: block; margin-top: 6px;
+    font-family: "Noto Sans KR", sans-serif; font-size: 0.9rem; color: #5d7686;
   }
   .row { margin-bottom: 14px; }
   .label { font-weight: 700; margin-bottom: 4px; }
@@ -164,6 +170,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
 <script>
+  // 이 확률(70%)을 넘는 기후가 하나도 없으면 "잘 모르겠어요"라고 답해요.
+  // 기준을 바꾸고 싶으면 이 숫자만 고치면 돼요. (0.7 = 70%)
+  const THRESHOLD = 0.7;
+
   // 모델 파일 경로 (저장소 맨 위 models/my-model 폴더)
   // 위에서부터 차례로 시도하고, 앞의 경로가 안 되면 다음 경로를 써요.
   // 마지막은 티처블머신 서버 주소라서 폴더 위치가 틀려도 작동해요.
@@ -231,6 +241,16 @@
   }
   showInfoPlaceholder();
 
+  // AI가 확신하지 못할 때 오른쪽 칸에 보이는 안내 문구
+  function showInfoUnsure() {
+    infoEl.className = "empty";
+    infoEl.style.borderLeftColor = "";
+    infoEl.innerHTML =
+      "<h3>🤔 아직 잘 모르겠어요</h3>" +
+      "<p style='margin:0'>어느 기후도 70%를 넘지 못했어요.<br>" +
+      "다른 풍경 사진으로 다시 해 볼까요?</p>";
+  }
+
   async function init() {
     for (const base of BASES) {
       try {
@@ -263,13 +283,24 @@
   });
 
   async function predict() {
-    const preds = await model.predict(preview);
+    let preds;
+    try {
+      preds = await model.predict(preview);
+    } catch (e) {
+      console.error(e);
+      statusEl.textContent = "⚠️ 사진을 분석하지 못했어요. 다른 사진으로 다시 해 보세요.";
+      return;
+    }
+
     const best = preds.reduce((a, b) => (b.probability > a.probability ? b : a));
+    const confident = best.probability >= THRESHOLD;
+
     bars.innerHTML = "";
     preds.forEach((p) => {
       const pct = (p.probability * 100).toFixed(1);
       const row = document.createElement("div");
-      row.className = "row" + (p === best ? " top" : "");
+      // 70%를 넘었을 때만 가장 높은 기후에 ⭐ 표시
+      row.className = "row" + (confident && p === best ? " top" : "");
       row.innerHTML =
         '<div class="label">' + p.className + '</div>' +
         '<div class="track"><div class="fill" style="background:' +
@@ -279,19 +310,28 @@
         row.querySelector(".fill").style.width = Math.max(p.probability * 100, 0) + "%";
       });
     });
-    verdict.textContent = "이 사진은 「" + best.className + "」 같아요!";
 
-    // 오른쪽 칸에 판단한 기후의 특징 보여주기
-    const info = CLIMATE_INFO[best.className];
-    if (info) {
-      infoEl.className = "";
-      infoEl.style.borderLeftColor = info.color;
-      infoEl.innerHTML =
-        "<h3>" + info.title + "</h3><ul>" +
-        info.points.map((t) => "<li>" + t + "</li>").join("") +
-        "</ul>";
+    if (!confident) {
+      // 세 기후 모두 70% 미만 -> 잘 모르겠어요
+      verdict.className = "unsure";
+      verdict.innerHTML = "🤔 잘 모르겠어요<small>어느 기후도 70%를 넘지 못했어요.</small>";
+      showInfoUnsure();
     } else {
-      showInfoPlaceholder();
+      verdict.className = "";
+      verdict.textContent = "이 사진은 「" + best.className + "」 같아요!";
+
+      // 오른쪽 칸에 판단한 기후의 특징 보여주기
+      const info = CLIMATE_INFO[best.className];
+      if (info) {
+        infoEl.className = "";
+        infoEl.style.borderLeftColor = info.color;
+        infoEl.innerHTML =
+          "<h3>" + info.title + "</h3><ul>" +
+          info.points.map((t) => "<li>" + t + "</li>").join("") +
+          "</ul>";
+      } else {
+        showInfoPlaceholder();
+      }
     }
 
     statusEl.textContent = "";
